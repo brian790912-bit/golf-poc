@@ -4908,9 +4908,20 @@ function mpEnterGame(code, game) {
     // 更新底部 bar 球友清單
     const players = Object.values(g.players || {});
     document.getElementById('mpBarPlayers').textContent = players.map(p => p.name.split(' ')[0]).join('、');
-    // 套用遠端狀態（防迴圈）
+    // 套用遠端狀態（防迴圈 + 防搶 focus）
     if (g.state && !mpIsApplyingRemote) {
-      mpApplyRemoteState(g.state);
+      const active = document.activeElement;
+      const isTyping = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT');
+      if (isTyping) {
+        const pendingState = g.state;
+        const applyWhenDone = () => {
+          active.removeEventListener('blur', applyWhenDone);
+          setTimeout(() => { if (!mpIsApplyingRemote) mpApplyRemoteState(pendingState); }, 300);
+        };
+        active.addEventListener('blur', applyWhenDone);
+      } else {
+        mpApplyRemoteState(g.state);
+      }
     }
   });
 
