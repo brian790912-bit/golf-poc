@@ -4909,9 +4909,14 @@ function mpEnterGame(code, game) {
   bar.classList.add('show');
   document.getElementById('mpBarCode').textContent = code;
 
+  // 強制清除 localStorage 的舊資料，確保不帶入任何前一局的資訊
+  localStorage.removeItem('golfAutoSaveBeta15');
+
   // 如果有儲存的狀態，套用；新球局（無狀態）則清空名字並帶入球友
   if (game.state) {
-    mpApplyRemoteState(game.state);
+    // 先清空再套用，確保舊資料不殘留
+    if (typeof clearCurrentRoundData === 'function') clearCurrentRoundData(false);
+    setTimeout(() => mpApplyRemoteState(game.state), 300);
   } else {
     mpFillPlayersFromLobby(game);
   }
