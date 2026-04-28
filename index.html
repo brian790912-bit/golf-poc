@@ -4856,6 +4856,7 @@ function mpEnterLobby(code) {
         <div style="flex:1;font-size:14px;font-weight:500">${p.name}</div>
         ${uid === game.hostUid ? '<span class="mp-badge mp-badge-host">主持人</span>' : ''}
         ${uid === mpUser.uid ? '<span class="mp-badge mp-badge-you">我</span>' : ''}
+        ${uid === mpUser.uid ? `<button onclick="mpRenameInLobby()" style="background:none;border:none;cursor:pointer;font-size:16px;padding:4px 6px;color:#7c8879;">✏️</button>` : ''}
       </div>
     `).join('');
     const startBtn = document.getElementById('mpStartBtn');
@@ -4874,6 +4875,17 @@ window.mpStartGame = async () => {
   await update(ref(db, `games/${mpGameId}`), { status: 'playing' });
 };
 
+
+// ── RENAME IN LOBBY ──────────────────────────────────────
+window.mpRenameInLobby = async () => {
+  const current = mpUser.displayName || '球友';
+  const newName = window.prompt('修改你在球局的名字：', current);
+  if (!newName || !newName.trim() || newName.trim() === current) return;
+  const trimmed = newName.trim().slice(0, 10);
+  await updateProfile(mpUser, { displayName: trimmed });
+  mpUser.displayName = trimmed;
+  await update(ref(db, `games/${mpGameId}/players/${mpUser.uid}`), { name: trimmed });
+};
 // ── ENTER GAME ───────────────────────────────────────────
 function mpEnterGame(code, game) {
   // 關閉 overlay
