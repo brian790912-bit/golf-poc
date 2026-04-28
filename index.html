@@ -1101,16 +1101,9 @@
       <button id="favoriteBtn" onclick="handleFavoriteToggle()" style="font-size:1.4rem; background:none; border:none; cursor:pointer; padding:4px 8px;" title="加入最愛">☆</button>
       <span id="favoriteLabel" style="font-size:.9rem; color:#7c8879;">我的最愛</span>
     </div>
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+    <div style="display:grid; grid-template-columns:1fr; gap:8px;">
       <button type="button" class="new-game-btn" onclick="showNewCourseDialog('')" style="background:linear-gradient(180deg,#2f6b3f,#1e4d2b);">新增球場</button>
-      <button type="button" class="new-game-btn" onclick="startNewGame()" style="background:linear-gradient(180deg,#2f6b3f,#1e4d2b);">開新球局</button>
     </div>
-    <div class="small-note" style="margin-top:2px;">球場資料需手動新增，之後可直接從下拉選單選取</div>
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
-      <button type="button" class="new-game-btn" onclick="triggerImportCoursesJson()" style="background:linear-gradient(180deg,#607d8b,#546e7a);">匯入球場資料</button>
-      <button type="button" class="new-game-btn" onclick="exportCoursesJson()" style="background:linear-gradient(180deg,#607d8b,#546e7a);">匯出球場資料</button>
-    </div>
-    <div class="small-note" style="margin-top:-4px; margin-bottom:4px;">每次新增球場後請立即匯出備份，系統更新可能導致資料遺失</div>
     </div>
   </div>
   <input type="file" id="importCoursesFile" accept="application/json,.json" style="display:none" onchange="importCoursesJson(event)">
@@ -2536,12 +2529,15 @@
 
 
     function getSavedCourses(){
+      // 先回傳 localStorage 快取，背景從 Firebase 同步
       try { return JSON.parse(localStorage.getItem('golfSavedCoursesV21') || '{}'); }
       catch(e){ return {}; }
     }
 
     function setSavedCourses(data){
+      // 同時存 localStorage（即時）和 Firebase（共用）
       localStorage.setItem('golfSavedCoursesV21', JSON.stringify(data));
+      mpSyncCoursesToFirebase(data);
     }
 
     function buildCoursesBackupPayload(){
@@ -4752,6 +4748,8 @@ onAuthStateChanged(auth, async user => {
     document.getElementById('mpWelcomeName').textContent = `${name.split(' ')[0]}，您好！`;
     // handle redirect result
     try { await getRedirectResult(auth); } catch(e) {}
+    // 載入共用球場資料
+    await mpLoadCoursesFromFirebase();
     mpShowScreen('home');
   } else {
     mpUser = null;
@@ -4900,17 +4898,20 @@ function mpEnterGame(code, game) {
   bar.classList.add('show');
   document.getElementById('mpBarCode').textContent = code;
 
-  // 如果有儲存的狀態，套用
-  if (game.state) mpApplyRemoteState(game.state);
+  // 如果有儲存的狀態，套用；新球局（無狀態）則清空名字並帶入球友
+  if (game.state) {
+    mpApplyRemoteState(game.state);
+  } else {
+    mpFillPlayersFromLobby(game);
+  }
 
   // 監聽 Firebase 更新
   if (mpGameListener) off(ref(db, `games/${mpGameId}`));
   mpGameListener = onValue(ref(db, `games/${code}`), snap => {
     if (!snap.exists()) return;
     const g = snap.val();
-    // 更新底部 bar 球友清單
-    const players = Object.values(g.players || {});
-    document.getElementById('mpBarPlayers').textContent = players.map(p => p.name.split(' ')[0]).join('、');
+    // 更新底部 bar 球友清單（依玩家1-4順序，自己排第一）
+    mpUpdateBarPlayers(g);
     // 套用遠端狀態（防迴圈 + 防搶 focus）
     if (g.state && !mpIsApplyingRemote) {
       const active = document.activeElement;
@@ -4943,6 +4944,55 @@ function mpApplyRemoteState(state) {
   } finally {
     setTimeout(() => { mpIsApplyingRemote = false; }, 500);
   }
+}
+
+// ── UPDATE BAR PLAYERS ───────────────────────────────────
+function mpUpdateBarPlayers(game) {
+  // 優先讀 state 裡的玩家順序（name1~name4）
+  let names = [];
+  const state = game.state;
+  if (state) {
+    try {
+      const parsed = typeof state === 'string' ? JSON.parse(state) : state;
+      // 從 state 裡找 name1~name4
+      for (let i = 1; i <= 4; i++) {
+        const n = parsed[`name${i}`] || parsed?.inputs?.[`name${i}`];
+        if (n && n.trim()) names.push(n.trim());
+      }
+    } catch(e) {}
+  }
+  // 如果 state 沒有名字，退回用 players 物件
+  if (names.length === 0) {
+    const players = Object.values(game.players || {});
+    names = players.map(p => p.name.split(' ')[0]);
+  }
+  // 自己排第一
+  const myName = mpUser.displayName?.split(' ')[0];
+  if (myName && names.includes(myName)) {
+    names = [myName, ...names.filter(n => n !== myName)];
+  }
+  document.getElementById('mpBarPlayers').textContent = names.join('、');
+}
+
+// ── FILL PLAYERS FROM LOBBY ───────────────────────────────
+function mpFillPlayersFromLobby(game) {
+  // 新球局：清空舊資料，把等待室球友名字填入 name1~name4
+  if (typeof clearCurrentRoundData === 'function') clearCurrentRoundData(false);
+  const players = Object.entries(game.players || {});
+  // 自己排第一
+  const sorted = [
+    ...players.filter(([uid]) => uid === mpUser.uid),
+    ...players.filter(([uid]) => uid !== mpUser.uid)
+  ];
+  setTimeout(() => {
+    sorted.forEach(([uid, p], idx) => {
+      const el = document.getElementById(`name${idx + 1}`);
+      if (el) {
+        el.value = p.name;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    });
+  }, 300);
 }
 
 // ── HOOK AUTO SAVE ───────────────────────────────────────
@@ -4979,6 +5029,36 @@ window.mpLeaveGame = () => {
 };
 
 // ── HELPERS ──────────────────────────────────────────────
+// ── COURSES FIREBASE SYNC ────────────────────────────────
+window.mpSyncCoursesToFirebase = async (data) => {
+  try {
+    await update(ref(db, 'shared'), { courses: data });
+  } catch(e) { console.error('mpSyncCourses error', e); }
+};
+
+async function mpLoadCoursesFromFirebase() {
+  try {
+    const snap = await get(ref(db, 'shared/courses'));
+    if (!snap.exists()) return;
+    const remote = snap.val();
+    if (!remote || typeof remote !== 'object') return;
+    // 合併：本地 + 遠端（遠端優先）
+    const local = JSON.parse(localStorage.getItem('golfSavedCoursesV21') || '{}');
+    const merged = { ...local, ...remote };
+    localStorage.setItem('golfSavedCoursesV21', JSON.stringify(merged));
+    // 重新渲染球場下拉選單
+    if (typeof renderCourseSelect === 'function') renderCourseSelect();
+    else if (typeof initUI === 'function') initUI();
+  } catch(e) { console.error('mpLoadCourses error', e); }
+}
+
+// ── HDCP MEMORY FIREBASE SYNC ─────────────────────────────
+window.mpSyncHdcpToFirebase = async (data) => {
+  try {
+    await update(ref(db, 'shared'), { hdcpMemory: data });
+  } catch(e) {}
+};
+
 window.mpShowScreen = (name) => {
   ['login','home','create','join','lobby'].forEach(s => {
     const el = document.getElementById(`mp-screen-${s}`);
