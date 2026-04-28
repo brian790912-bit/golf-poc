@@ -5006,27 +5006,41 @@ function mpFillPlayersFromLobby(game) {
       }
     });
     if (typeof updateNames === 'function') updateNames(true);
+    // 填完名字後額外觸發讓洞記憶帶入
+    setTimeout(() => {
+      if (typeof applyHdcpMemoryAndNotify === 'function') applyHdcpMemoryAndNotify();
+    }, 400);
     // 填完名字後恢復同步
-    setTimeout(() => { mpIsApplyingRemote = false; }, 600);
+    setTimeout(() => { mpIsApplyingRemote = false; }, 800);
   }, 500);
 }
 
 // ── FILL LATE JOINING PLAYER ─────────────────────────────
 function mpFillLatePlayer(game, prevPlayerCount) {
-  // 有新玩家中途加入，補填名字
+  // 有新玩家中途加入，只把還沒填的名字補進空白欄位
   const players = Object.entries(game.players || {});
-  const sorted = [
-    ...players.filter(([uid]) => uid === mpUser.uid),
-    ...players.filter(([uid]) => uid !== mpUser.uid)
-  ];
-  // 只更新空白的欄位
-  sorted.forEach(([uid, p], idx) => {
-    const el = document.getElementById(`name${idx}`);
+
+  // 取得目前已填的名字
+  const filledNames = [];
+  for (let i = 0; i < 4; i++) {
+    const el = document.getElementById(`name${i}`);
+    if (el && el.value.trim()) filledNames.push(el.value.trim());
+  }
+
+  // 找出還沒有對應欄位的新玩家
+  const newPlayers = players.filter(([uid, p]) => !filledNames.includes(p.name));
+  if (newPlayers.length === 0) return;
+
+  // 找空白的欄位填入
+  let newIdx = 0;
+  for (let i = 0; i < 4 && newIdx < newPlayers.length; i++) {
+    const el = document.getElementById(`name${i}`);
     if (el && !el.value.trim()) {
-      el.value = p.name;
+      el.value = newPlayers[newIdx][1].name;
       el.dispatchEvent(new Event('input', { bubbles: true }));
+      newIdx++;
     }
-  });
+  }
   if (typeof updateNames === 'function') updateNames(true);
 }
 
