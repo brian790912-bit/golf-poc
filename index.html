@@ -4663,13 +4663,12 @@
   <!-- Screen: Create -->
   <div class="mp-sheet" id="mp-screen-create" style="display:none">
     <div class="mp-sheet-head" style="padding:16px 20px">
-      <h2 style="margin:0;font-size:17px">🏌️ 建立球局</h2>
+      <h2 style="margin:0;font-size:17px">🏌️ 新球局</h2>
     </div>
     <div class="mp-sheet-body">
-      <label class="mp-label">球局名稱（選填）</label>
-      <input class="mp-input" id="mpCreateName" placeholder="例：週末打球" />
+      <p style="color:#7c8879;font-size:13px;margin:0 0 16px">系統會產生一個 4 碼房間碼，分享給球友加入。</p>
       <div class="mp-error" id="mpCreateError"></div>
-      <button class="mp-btn mp-btn-primary" onclick="mpCreateGame()" style="margin-bottom:10px">建立球局</button>
+      <button class="mp-btn mp-btn-primary" onclick="mpCreateGame()" style="margin-bottom:10px">建立新球局</button>
       <button class="mp-btn" style="background:none;color:#999;font-size:13px;border:none" onclick="mpShowScreen('home')">← 返回</button>
     </div>
   </div>
@@ -4792,7 +4791,7 @@ window.mpLogout = async () => {
 
 // ── CREATE GAME ──────────────────────────────────────────
 window.mpCreateGame = async () => {
-  const label = document.getElementById('mpCreateName').value.trim() || '球局';
+  const label = '球局';
   let code = mpGenCode();
   const snap = await get(ref(db, `games/${code}`));
   if (snap.exists()) code = mpGenCode();
