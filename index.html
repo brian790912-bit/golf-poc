@@ -4694,7 +4694,10 @@
     </div>
     <div class="mp-sheet-body">
       <div class="mp-label">房間碼（分享給球友）</div>
-      <div class="mp-room-code-box" id="mpLobbyCode">----</div>
+      <div class="mp-room-code-box" id="mpLobbyCode" onclick="mpCopyCode()" style="cursor:pointer;" title="點擊複製">----</div>
+      <button onclick="mpCopyCode()" style="display:flex;align-items:center;justify-content:center;gap:6px;width:100%;background:rgba(255,255,255,0.1);border:1px solid rgba(201,168,76,0.4);color:#c9a84c;border-radius:8px;padding:7px;font-size:13px;cursor:pointer;margin-top:-4px;margin-bottom:8px;">
+        📋 複製房間碼
+      </button>
       <div id="mpLobbyInfo" style="margin:12px 0"></div>
       <div class="mp-label">已加入（<span id="mpPlayerCount">0</span>/4 人）</div>
       <div id="mpLobbyPlayerList" style="margin-bottom:14px"></div>
@@ -4981,6 +4984,24 @@ window.mpShowScreen = (name) => {
     const el = document.getElementById(`mp-screen-${s}`);
     if (el) el.style.display = s === name ? 'block' : 'none';
   });
+};
+
+window.mpCopyCode = async () => {
+  const code = document.getElementById('mpLobbyCode').textContent.trim();
+  if (!code || code === '----') return;
+  try {
+    await navigator.clipboard.writeText(code);
+    mpToast('✅ 已複製房間碼：' + code);
+  } catch(e) {
+    // fallback for older browsers
+    const el = document.createElement('input');
+    el.value = code;
+    document.body.appendChild(el);
+    el.select();
+    document.execCommand('copy');
+    document.body.removeChild(el);
+    mpToast('✅ 已複製房間碼：' + code);
+  }
 };
 
 function mpShowError(id, msg) {
