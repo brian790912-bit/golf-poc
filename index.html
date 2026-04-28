@@ -4875,8 +4875,16 @@ function mpEnterLobby(code) {
 }
 
 window.mpStartGame = async () => {
-  // 清除舊 state，確保新球局不帶入任何舊資料
-  await update(ref(db, `games/${mpGameId}`), { status: 'playing', state: null });
+  // 先把主持人目前的設定狀態寫進 Firebase，再開始球局
+  // 這樣加入者進來就能收到正確的模式設定
+  let currentState = null;
+  try {
+    if (typeof collectAppState === 'function') currentState = collectAppState();
+  } catch(e) {}
+  await update(ref(db, `games/${mpGameId}`), { 
+    status: 'playing', 
+    state: currentState  // 帶入主持人目前的設定（含比賽模式）
+  });
 };
 
 
@@ -4948,10 +4956,10 @@ function mpApplyRemoteState(state) {
   try {
     localStorage.setItem('golfAutoSaveBeta15', JSON.stringify(state));
     if (typeof restoreAutoSave === 'function') restoreAutoSave();
-    // 還原完畢後重新觸發讓洞記憶帶入（確保模式和名字都已還原）
+    // restoreAutoSave 完成後（isRestoringAutoSave 已歸零）呼叫讓洞帶入
     setTimeout(() => {
       if (typeof applyHdcpMemoryAndNotify === 'function') applyHdcpMemoryAndNotify();
-    }, 600);
+    }, 800);
   } catch(e) {
     console.error('mpApplyRemoteState error', e);
   } finally {
