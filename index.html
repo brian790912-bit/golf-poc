@@ -634,7 +634,7 @@
 <!-- Firebase SDK -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getAuth, GoogleAuthProvider, signInWithPopup, signInAnonymously as firebaseSignInAnonymously, onAuthStateChanged, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signInAnonymously as firebaseSignInAnonymously, onAuthStateChanged, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getDatabase, ref, set, get, update, onValue, off, push, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
 // ── FIREBASE CONFIG ──────────────────────────────────────
@@ -683,13 +683,16 @@ onAuthStateChanged(auth, async user => {
   }
 });
 
-// ── ANONYMOUS LOGIN ──────────────────────────────────────
+// ── LOGOUT ───────────────────────────────────────────────
 window.logOut = async () => {
   if(gameListener) off(ref(db, `games/${currentGameId}`));
   gameListener = null;
   currentGameId = null;
   await signOut(auth);
 };
+
+// ── ANONYMOUS LOGIN ──────────────────────────────────────
+window.signInAnonymously = async () => {
   const name = document.getElementById('anonName').value.trim();
   if (!name) {
     showError('loginError', '請輸入暱稱');
@@ -700,7 +703,6 @@ window.logOut = async () => {
   try {
     const cred = await firebaseSignInAnonymously(auth);
     await updateProfile(cred.user, { displayName: name });
-    // force refresh
     currentUser = cred.user;
     currentUser.displayName = name;
   } catch(e) {
@@ -713,13 +715,21 @@ window.signInWithGoogle = async () => {
   document.getElementById('loginError').style.display = 'none';
   try {
     const provider = new GoogleAuthProvider();
-    await signInWithPopup(auth, provider);
+    await signInWithRedirect(auth, provider);
   } catch(e) {
     document.getElementById('loginLoading').style.display = 'none';
     document.getElementById('loginError').style.display = 'block';
     document.getElementById('loginError').textContent = '登入失敗：' + e.message;
   }
 };
+
+// 處理 redirect 回來後的結果
+getRedirectResult(auth).catch(e => {
+  if (e && e.code !== 'auth/no-current-user') {
+    const el = document.getElementById('loginError');
+    if (el) { el.style.display = 'block'; el.textContent = '登入失敗：' + e.message; }
+  }
+});
 
 // ── GENERATE ROOM CODE ───────────────────────────────────
 function generateCode() {
