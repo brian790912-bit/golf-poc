@@ -4875,7 +4875,8 @@ function mpEnterLobby(code) {
 }
 
 window.mpStartGame = async () => {
-  await update(ref(db, `games/${mpGameId}`), { status: 'playing' });
+  // 清除舊 state，確保新球局不帶入任何舊資料
+  await update(ref(db, `games/${mpGameId}`), { status: 'playing', state: null });
 };
 
 
