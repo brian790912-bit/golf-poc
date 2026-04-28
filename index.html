@@ -628,7 +628,7 @@
     </div>
   </div>
 
-  <button class="btn btn-outline btn-danger" style="margin-top:8px;color:var(--red);border-color:var(--red)" onclick="leaveGame()">離開球局</button>
+  <button class="btn" style="margin-top:8px;background:transparent;color:#999;border:2px solid #ddd;font-weight:500" onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background='transparent'" onclick="leaveGame()">離開球局</button>
 </div>
 
 <!-- Firebase SDK -->
@@ -889,50 +889,87 @@ function renderScorecard(game) {
     return `<div class="hole-tab ${hasScore?'has-score':''}" onclick="scrollToHole(${h})">${h}</div>`;
   }).join('');
 
-  // Build table
   const thead = document.querySelector('#scorecardTable thead');
   const tbody = document.querySelector('#scorecardTable tbody');
+  const focusedId = document.activeElement?.id; // remember which input is focused
 
-  // Header row
-  let hdr = '<tr><th>球員</th>';
-  for(let i=1;i<=holes;i++) hdr += `<th id="th-h${i}">${i}</th>`;
-  hdr += '<th>Total</th></tr>';
-  thead.innerHTML = hdr;
+  // Only rebuild if structure changed (new player joined)
+  const currentRows = tbody.querySelectorAll('tr.player-row').length;
+  const needRebuild = currentRows !== players.length;
 
-  // Par row
-  let parRow = '<tr class="par-row"><td>Par</td>';
-  const totalPar = par.reduce((a,b)=>a+b,0);
-  for(let i=0;i<holes;i++) parRow += `<td>${par[i]}</td>`;
-  parRow += `<td>${totalPar}</td></tr>`;
+  if (needRebuild) {
+    // Full rebuild
+    let hdr = '<tr><th>球員</th>';
+    for(let i=1;i<=holes;i++) hdr += `<th id="th-h${i}">${i}</th>`;
+    hdr += '<th>Total</th></tr>';
+    thead.innerHTML = hdr;
 
-  // Player rows
-  let rows = parRow;
-  players.forEach(([uid, player]) => {
-    const isMe = uid === currentUser.uid;
-    let total = 0;
-    let row = `<tr><td>${isMe ? '⭐ ' : ''}${player.name.split(' ')[0]}</td>`;
-    for(let i=1;i<=holes;i++) {
-      const val = scores[uid]?.[`h${i}`];
-      const diff = val !== undefined ? val - par[i-1] : null;
-      let cls = '';
-      if(diff !== null) {
-        if(diff <= -2) cls = 'eagle';
-        else if(diff === -1) cls = 'birdie';
-        else if(diff === 1) cls = 'bogey';
-        else if(diff >= 2) cls = 'double';
-        total += val;
+    let parRow = '<tr class="par-row"><td>Par</td>';
+    const totalPar = par.reduce((a,b)=>a+b,0);
+    for(let i=0;i<holes;i++) parRow += `<td>${par[i]}</td>`;
+    parRow += `<td>${totalPar}</td></tr>`;
+
+    let rows = parRow;
+    players.forEach(([uid, player]) => {
+      const isMe = uid === currentUser.uid;
+      let total = 0;
+      let row = `<tr class="player-row" data-uid="${uid}"><td style="white-space:nowrap">${isMe ? '⭐ ' : ''}${player.name.split(' ')[0]}</td>`;
+      for(let i=1;i<=holes;i++) {
+        const val = scores[uid]?.[`h${i}`];
+        const diff = val !== undefined ? val - par[i-1] : null;
+        let cls = getScoreCls(diff);
+        if(diff !== null) total += val;
+        row += `<td><input class="score-cell-input ${cls}" id="score-${uid}-h${i}" type="number" min="1" max="20" value="${val!==undefined?val:''}" placeholder="${par[i-1]}" onchange="saveScore('${uid}','h${i}',this.value)" oninput="colorInput(this,${par[i-1]})" /></td>`;
       }
-      if(isMe) {
-        row += `<td><input class="score-cell-input ${cls}" id="score-${uid}-h${i}" type="number" min="1" max="15" value="${val!==undefined?val:''}" placeholder="${par[i-1]}" onchange="saveScore('${uid}','h${i}',this.value)" oninput="colorInput(this,${par[i-1]})" /></td>`;
-      } else {
-        row += `<td style="font-family:'DM Mono',monospace;font-weight:600;color:${getScoreColor(diff)}">${val !== undefined ? val : '-'}</td>`;
+      row += `<td class="total-cell" id="total-${uid}">${total > 0 ? total : '-'}</td></tr>`;
+      rows += row;
+    });
+    tbody.innerHTML = rows;
+  } else {
+    // Smart update: only update cells not currently focused
+    players.forEach(([uid, player]) => {
+      let total = 0;
+      for(let i=1;i<=holes;i++) {
+        const val = scores[uid]?.[`h${i}`];
+        const diff = val !== undefined ? val - par[i-1] : null;
+        if(diff !== null) total += val;
+        const inputId = `score-${uid}-h${i}`;
+        if (inputId === focusedId) continue; // skip focused input
+        const input = document.getElementById(inputId);
+        if (input) {
+          input.value = val !== undefined ? val : '';
+          input.className = 'score-cell-input ' + getScoreCls(diff);
+        }
       }
-    }
-    row += `<td class="total-cell">${total > 0 ? total : '-'}</td></tr>`;
-    rows += row;
-  });
+      const totalEl = document.getElementById(`total-${uid}`);
+      if (totalEl) totalEl.textContent = total > 0 ? total : '-';
+    });
+    // update hole tabs
+    players.forEach(([uid]) => {
+      Array.from({length: holes}, (_,i) => {
+        const h = i+1;
+        const tab = tabsEl.children[i];
+        if (!tab) return;
+        const hasScore = players.some(([u]) => scores[u]?.[`h${h}`] !== undefined);
+        tab.className = `hole-tab${hasScore?' has-score':''}`;
+      });
+    });
+  }
 
-  tbody.innerHTML = rows;
+  // Restore focus
+  if (focusedId) {
+    const el = document.getElementById(focusedId);
+    if (el) el.focus();
+  }
+}
+
+function getScoreCls(diff) {
+  if(diff === null || diff === undefined) return '';
+  if(diff <= -2) return 'eagle';
+  if(diff === -1) return 'birdie';
+  if(diff === 1) return 'bogey';
+  if(diff >= 2) return 'double';
+  return '';
 }
 
 function getScoreColor(diff) {
