@@ -458,6 +458,7 @@
   <div class="user-info" id="headerUser" style="display:none">
     <div class="user-avatar" id="headerAvatar">?</div>
     <span id="headerName">-</span>
+    <button onclick="logOut()" style="background:none;border:1px solid rgba(255,255,255,0.3);color:white;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;margin-left:4px">登出</button>
   </div>
 </div>
 
@@ -683,7 +684,12 @@ onAuthStateChanged(auth, async user => {
 });
 
 // ── ANONYMOUS LOGIN ──────────────────────────────────────
-window.signInAnonymously = async () => {
+window.logOut = async () => {
+  if(gameListener) off(ref(db, `games/${currentGameId}`));
+  gameListener = null;
+  currentGameId = null;
+  await signOut(auth);
+};
   const name = document.getElementById('anonName').value.trim();
   if (!name) {
     showError('loginError', '請輸入暱稱');
@@ -821,11 +827,15 @@ function enterLobby(code) {
     `).join('');
     // show start button only to host & >= 2 players
     const startBtn = document.getElementById('startGameBtn');
-    if (game.hostUid === currentUser.uid && pArr.length >= 2) {
+    if (game.hostUid === currentUser.uid) {
       startBtn.style.display = 'flex';
-    } else if (game.hostUid === currentUser.uid) {
-      startBtn.style.display = 'flex';
-      startBtn.textContent = `等待球友加入（目前 ${pArr.length} 人）`;
+      if (pArr.length >= 2) {
+        startBtn.textContent = `開始計分 ▶（${pArr.length} 人）`;
+        startBtn.disabled = false;
+      } else {
+        startBtn.textContent = `等待球友加入（目前 ${pArr.length} 人）`;
+        startBtn.disabled = true;
+      }
     } else {
       startBtn.style.display = 'none';
     }
