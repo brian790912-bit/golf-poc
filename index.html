@@ -4976,14 +4976,19 @@ function mpUpdateBarPlayers(game) {
 
 // ── FILL PLAYERS FROM LOBBY ───────────────────────────────
 function mpFillPlayersFromLobby(game) {
-  // 新球局：清空舊資料，把等待室球友名字填入 name1~name4
-  if (typeof clearCurrentRoundData === 'function') clearCurrentRoundData(false);
+  // 暫停同步，避免清空動作被當成狀態同步出去
+  mpIsApplyingRemote = true;
+
   const players = Object.entries(game.players || {});
   // 自己排第一
   const sorted = [
     ...players.filter(([uid]) => uid === mpUser.uid),
     ...players.filter(([uid]) => uid !== mpUser.uid)
   ];
+
+  if (typeof clearCurrentRoundData === 'function') clearCurrentRoundData(false);
+
+  // 等 DOM 更新完再填名字
   setTimeout(() => {
     sorted.forEach(([uid, p], idx) => {
       const el = document.getElementById(`name${idx + 1}`);
@@ -4992,7 +4997,9 @@ function mpFillPlayersFromLobby(game) {
         el.dispatchEvent(new Event('input', { bubbles: true }));
       }
     });
-  }, 300);
+    // 填完名字後恢復同步
+    setTimeout(() => { mpIsApplyingRemote = false; }, 600);
+  }, 500);
 }
 
 // ── HOOK AUTO SAVE ───────────────────────────────────────
