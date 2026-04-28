@@ -4708,7 +4708,7 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult, signInAnonymously, onAuthStateChanged, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getDatabase, ref, set, get, update, onValue, off } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+import { getDatabase, ref, set, get, update, remove, onValue, off } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
 // ── CONFIG ───────────────────────────────────────────────
 const firebaseConfig = {
@@ -4948,6 +4948,10 @@ function mpApplyRemoteState(state) {
   try {
     localStorage.setItem('golfAutoSaveBeta15', JSON.stringify(state));
     if (typeof restoreAutoSave === 'function') restoreAutoSave();
+    // 還原完畢後重新觸發讓洞記憶帶入（確保模式和名字都已還原）
+    setTimeout(() => {
+      if (typeof applyHdcpMemoryAndNotify === 'function') applyHdcpMemoryAndNotify();
+    }, 600);
   } catch(e) {
     console.error('mpApplyRemoteState error', e);
   } finally {
@@ -5007,12 +5011,19 @@ function mpFillPlayersFromLobby(game) {
       }
     });
     if (typeof updateNames === 'function') updateNames(true);
-    // 填完名字後額外觸發讓洞記憶帶入
+    // 填完名字後額外觸發讓洞記憶帶入（等模式設定也穩定）
     setTimeout(() => {
       if (typeof applyHdcpMemoryAndNotify === 'function') applyHdcpMemoryAndNotify();
-    }, 400);
+      // 帶入後再同步一次確保狀態最新
+      setTimeout(() => {
+        if (!mpIsApplyingRemote && mpGameId && typeof collectAppState === 'function') {
+          const state = collectAppState();
+          update(ref(db, `games/${mpGameId}`), { state }).catch(()=>{});
+        }
+      }, 200);
+    }, 1000);
     // 填完名字後恢復同步
-    setTimeout(() => { mpIsApplyingRemote = false; }, 800);
+    setTimeout(() => { mpIsApplyingRemote = false; }, 1400);
   }, 500);
 }
 
@@ -5063,18 +5074,32 @@ function mpScheduleSync() {
     } catch(e) {
       console.error('mpSync error', e);
     }
-  }, 800);
+  }, 400);
 }
 
 // ── LEAVE GAME ───────────────────────────────────────────
-window.mpLeaveGame = () => {
-  if (mpGameListener) { off(ref(db, `games/${mpGameId}`)); mpGameListener = null; }
-  mpGameId = null; mpIsHost = false;
+window.mpLeaveGame = async () => {
+  const gameId = mpGameId;
+  const isHost = mpIsHost;
+  if (mpGameListener) { off(ref(db, `games/${gameId}`)); mpGameListener = null; }
+  mpGameId = null; mpIsHost = false; mpLastPlayerCount = 0;
   document.getElementById('mp-bar').classList.remove('show');
   document.body.classList.remove('mp-active');
   document.getElementById('mp-overlay').classList.remove('hide');
   document.removeEventListener('input', mpScheduleSync, true);
   document.removeEventListener('change', mpScheduleSync, true);
+  // 清除 Firebase 球局資料
+  if (gameId) {
+    try {
+      if (isHost) {
+        // 主持人離開：刪除整個球局
+        await remove(ref(db, `games/${gameId}`));
+      } else {
+        // 非主持人：只移除自己
+        await remove(ref(db, `games/${gameId}/players/${mpUser.uid}`));
+      }
+    } catch(e) { console.error('mpLeaveGame cleanup error', e); }
+  }
   mpShowScreen('home');
 };
 
