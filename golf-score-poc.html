@@ -1,0 +1,957 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Golf Score POC</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=DM+Mono:wght@400;500&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --green: #1a6b3c;
+    --green-light: #2d9e5f;
+    --green-dark: #0f4524;
+    --gold: #c9a84c;
+    --bg: #f5f2eb;
+    --white: #ffffff;
+    --gray: #6b7280;
+    --gray-light: #e8e4db;
+    --text: #1a1a1a;
+    --red: #c0392b;
+  }
+
+  body {
+    font-family: 'Noto Sans TC', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  /* ── HEADER ── */
+  .header {
+    background: var(--green-dark);
+    color: white;
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  }
+  .header-logo {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: var(--gold);
+  }
+  .header-logo span { color: white; }
+  .user-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+  }
+  .user-avatar {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    background: var(--gold);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--green-dark);
+    overflow: hidden;
+  }
+  .user-avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+  /* ── PAGES ── */
+  .page { display: none; padding: 24px 20px; max-width: 480px; margin: 0 auto; }
+  .page.active { display: block; }
+
+  /* ── LOGIN PAGE ── */
+  .login-hero {
+    text-align: center;
+    padding: 48px 0 32px;
+  }
+  .login-icon {
+    font-size: 64px;
+    margin-bottom: 16px;
+  }
+  .login-title {
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--green-dark);
+    margin-bottom: 8px;
+  }
+  .login-sub {
+    color: var(--gray);
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  /* ── BUTTONS ── */
+  .btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    padding: 14px 20px;
+    border-radius: 12px;
+    border: none;
+    font-size: 15px;
+    font-weight: 700;
+    font-family: 'Noto Sans TC', sans-serif;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn-google {
+    background: white;
+    color: #333;
+    border: 2px solid #e0e0e0;
+    margin-top: 32px;
+  }
+  .btn-google:hover { border-color: #aaa; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+  .btn-primary {
+    background: var(--green);
+    color: white;
+  }
+  .btn-primary:hover { background: var(--green-light); }
+  .btn-primary:disabled { background: #aaa; cursor: not-allowed; }
+  .btn-outline {
+    background: transparent;
+    color: var(--green);
+    border: 2px solid var(--green);
+  }
+  .btn-outline:hover { background: var(--green); color: white; }
+  .btn-danger {
+    background: var(--red);
+    color: white;
+  }
+  .btn-sm {
+    width: auto;
+    padding: 8px 16px;
+    font-size: 13px;
+    border-radius: 8px;
+  }
+
+  /* ── CARDS ── */
+  .card {
+    background: white;
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    margin-bottom: 16px;
+  }
+  .card-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--gray);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 12px;
+  }
+
+  /* ── HOME PAGE ── */
+  .welcome-name {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--green-dark);
+    margin-bottom: 4px;
+  }
+  .welcome-sub { color: var(--gray); font-size: 14px; margin-bottom: 24px; }
+
+  .action-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .action-card {
+    background: white;
+    border-radius: 16px;
+    padding: 20px 16px;
+    text-align: center;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: all 0.15s ease;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  }
+  .action-card:hover { border-color: var(--green); transform: translateY(-2px); }
+  .action-card .icon { font-size: 32px; margin-bottom: 8px; }
+  .action-card .label { font-size: 14px; font-weight: 700; color: var(--green-dark); }
+  .action-card .desc { font-size: 12px; color: var(--gray); margin-top: 4px; }
+
+  /* ── FORM ── */
+  .form-group { margin-bottom: 16px; }
+  .form-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--gray);
+    margin-bottom: 6px;
+  }
+  .form-input {
+    width: 100%;
+    padding: 12px 14px;
+    border: 2px solid var(--gray-light);
+    border-radius: 10px;
+    font-size: 15px;
+    font-family: 'Noto Sans TC', sans-serif;
+    background: white;
+    transition: border-color 0.15s;
+    outline: none;
+  }
+  .form-input:focus { border-color: var(--green); }
+  .form-input.code-input {
+    font-family: 'DM Mono', monospace;
+    font-size: 22px;
+    text-align: center;
+    letter-spacing: 6px;
+    text-transform: uppercase;
+  }
+
+  /* ── ROOM CODE DISPLAY ── */
+  .room-code-box {
+    background: var(--green-dark);
+    color: var(--gold);
+    font-family: 'DM Mono', monospace;
+    font-size: 36px;
+    font-weight: 500;
+    text-align: center;
+    letter-spacing: 10px;
+    padding: 20px;
+    border-radius: 12px;
+    margin: 12px 0;
+  }
+  .room-code-hint { font-size: 12px; color: var(--gray); text-align: center; }
+
+  /* ── PLAYER LIST ── */
+  .player-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--gray-light);
+  }
+  .player-item:last-child { border-bottom: none; }
+  .player-avatar-sm {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    background: var(--green-light);
+    color: white;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700;
+    font-size: 14px;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .player-avatar-sm img { width: 100%; height: 100%; object-fit: cover; }
+  .player-name { font-size: 14px; font-weight: 500; flex: 1; }
+  .player-badge {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-weight: 700;
+  }
+  .badge-host { background: var(--gold); color: var(--green-dark); }
+  .badge-you { background: var(--green-light); color: white; }
+  .badge-waiting { background: var(--gray-light); color: var(--gray); }
+
+  /* ── SCORECARD ── */
+  .scorecard-wrap { overflow-x: auto; margin: 0 -20px; padding: 0 20px; }
+  .scorecard {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    min-width: 400px;
+  }
+  .scorecard th {
+    background: var(--green-dark);
+    color: white;
+    padding: 8px 6px;
+    text-align: center;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+  .scorecard th:first-child { text-align: left; padding-left: 12px; }
+  .scorecard td {
+    padding: 6px;
+    text-align: center;
+    border-bottom: 1px solid var(--gray-light);
+  }
+  .scorecard td:first-child { text-align: left; padding-left: 12px; font-weight: 500; }
+  .scorecard tr:hover td { background: #f9f7f2; }
+  .scorecard tr.par-row td { background: #f0f7f3; color: var(--green); font-weight: 700; font-size: 11px; }
+
+  .score-cell-input {
+    width: 36px; height: 30px;
+    border: 1px solid var(--gray-light);
+    border-radius: 6px;
+    text-align: center;
+    font-size: 14px;
+    font-family: 'DM Mono', monospace;
+    font-weight: 500;
+    background: white;
+    outline: none;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .score-cell-input:focus { border-color: var(--green); background: #f0f7f3; }
+  .score-cell-input.eagle { background: #fef3c7; border-color: var(--gold); }
+  .score-cell-input.birdie { background: #dcfce7; border-color: var(--green-light); }
+  .score-cell-input.bogey { background: #fee2e2; border-color: #f87171; }
+  .score-cell-input.double { background: #fecaca; border-color: var(--red); }
+
+  .total-cell {
+    font-family: 'DM Mono', monospace;
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--green-dark);
+  }
+
+  /* ── STATUS BAR ── */
+  .status-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--gray);
+    margin-bottom: 12px;
+  }
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #10b981;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* ── TOAST ── */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: var(--green-dark);
+    color: white;
+    padding: 12px 20px;
+    border-radius: 24px;
+    font-size: 14px;
+    font-weight: 500;
+    transition: transform 0.3s ease;
+    z-index: 999;
+    white-space: nowrap;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+
+  /* ── DIVIDER ── */
+  .divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--gray);
+    font-size: 12px;
+    margin: 16px 0;
+  }
+  .divider::before, .divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--gray-light);
+  }
+
+  /* ── SECTION TITLE ── */
+  .section-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--green-dark);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .back-btn {
+    background: none;
+    border: none;
+    color: var(--green);
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    padding: 0;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .loading {
+    text-align: center;
+    padding: 48px 0;
+    color: var(--gray);
+  }
+  .loading-spinner {
+    font-size: 32px;
+    animation: spin 1s linear infinite;
+    display: block;
+    margin-bottom: 12px;
+  }
+  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+  .error-msg {
+    background: #fee2e2;
+    color: var(--red);
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    margin-bottom: 12px;
+  }
+
+  .info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+    color: var(--gray);
+    margin-bottom: 6px;
+  }
+  .info-row strong { color: var(--text); }
+
+  select.form-input { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b7280' stroke-width='2' fill='none'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; padding-right: 36px; }
+
+  .hole-tabs {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  .hole-tab {
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    border: 2px solid var(--gray-light);
+    background: white;
+    color: var(--gray);
+    transition: all 0.15s;
+  }
+  .hole-tab.active { border-color: var(--green); background: var(--green); color: white; }
+  .hole-tab.has-score { border-color: var(--green-light); color: var(--green); }
+
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-logo">⛳ Golf<span>Score</span></div>
+  <div class="user-info" id="headerUser" style="display:none">
+    <div class="user-avatar" id="headerAvatar">?</div>
+    <span id="headerName">-</span>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- ════════════════════════════════
+     PAGE: LOGIN
+════════════════════════════════ -->
+<div class="page active" id="page-login">
+  <div class="login-hero">
+    <div class="login-icon">⛳</div>
+    <div class="login-title">Golf Score</div>
+    <div class="login-sub">多人即時計分<br>同組球友同步看成績</div>
+  </div>
+  <button class="btn btn-google" onclick="signInWithGoogle()">
+    <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+    使用 Google 帳號登入
+  </button>
+  <div id="loginError" class="error-msg" style="display:none;margin-top:12px"></div>
+  <div id="loginLoading" class="loading" style="display:none">
+    <span class="loading-spinner">⏳</span>
+    登入中...
+  </div>
+</div>
+
+<!-- ════════════════════════════════
+     PAGE: HOME
+════════════════════════════════ -->
+<div class="page" id="page-home">
+  <div class="welcome-name" id="welcomeName">你好！</div>
+  <div class="welcome-sub">今天要開球了嗎？</div>
+
+  <div class="action-grid">
+    <div class="action-card" onclick="showPage('page-create')">
+      <div class="icon">🏌️</div>
+      <div class="label">建立球局</div>
+      <div class="desc">開新局，邀請球友</div>
+    </div>
+    <div class="action-card" onclick="showPage('page-join')">
+      <div class="icon">🤝</div>
+      <div class="label">加入球局</div>
+      <div class="desc">輸入房間碼加入</div>
+    </div>
+  </div>
+
+  <div id="myGamesSection" style="display:none">
+    <div class="card-title">我的球局</div>
+    <div id="myGamesList"></div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════
+     PAGE: CREATE GAME
+════════════════════════════════ -->
+<div class="page" id="page-create">
+  <button class="back-btn" onclick="showPage('page-home')">← 返回</button>
+  <div class="section-title">🏌️ 建立球局</div>
+
+  <div class="card">
+    <div class="form-group">
+      <label class="form-label">球場名稱</label>
+      <input class="form-input" id="createCourse" placeholder="例：林口球場" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">洞數</label>
+      <select class="form-input" id="createHoles">
+        <option value="18">18 洞</option>
+        <option value="9">9 洞</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">比賽模式</label>
+      <select class="form-input" id="createMode">
+        <option value="stroke">筆數賽（Stroke Play）</option>
+        <option value="match">比洞賽（Match Play）</option>
+      </select>
+    </div>
+  </div>
+
+  <div id="createError" class="error-msg" style="display:none"></div>
+  <button class="btn btn-primary" onclick="createGame()">建立球局</button>
+</div>
+
+<!-- ════════════════════════════════
+     PAGE: JOIN GAME
+════════════════════════════════ -->
+<div class="page" id="page-join">
+  <button class="back-btn" onclick="showPage('page-home')">← 返回</button>
+  <div class="section-title">🤝 加入球局</div>
+
+  <div class="card">
+    <div class="form-group">
+      <label class="form-label">輸入房間碼</label>
+      <input class="form-input code-input" id="joinCode" placeholder="ABCD" maxlength="4" />
+    </div>
+  </div>
+
+  <div id="joinError" class="error-msg" style="display:none"></div>
+  <button class="btn btn-primary" onclick="joinGame()">加入</button>
+</div>
+
+<!-- ════════════════════════════════
+     PAGE: LOBBY (等待室)
+════════════════════════════════ -->
+<div class="page" id="page-lobby">
+  <div class="section-title">⏳ 等待球友加入</div>
+
+  <div class="card">
+    <div class="card-title">房間碼</div>
+    <div class="room-code-box" id="lobbyCode">----</div>
+    <div class="room-code-hint">分享給球友，讓他們輸入這個碼加入</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">球局資訊</div>
+    <div class="info-row"><span>球場</span><strong id="lobbyCourse">-</strong></div>
+    <div class="info-row"><span>洞數</span><strong id="lobbyHoles">-</strong></div>
+    <div class="info-row"><span>模式</span><strong id="lobbyMode">-</strong></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">已加入球友（<span id="playerCount">0</span>/4）</div>
+    <div id="lobbyPlayerList"></div>
+  </div>
+
+  <div id="startError" class="error-msg" style="display:none"></div>
+  <button class="btn btn-primary" id="startGameBtn" onclick="startGame()" style="display:none">開始計分 ▶</button>
+  <button class="btn btn-outline" style="margin-top:12px" onclick="leaveGame()">離開球局</button>
+</div>
+
+<!-- ════════════════════════════════
+     PAGE: SCORECARD
+════════════════════════════════ -->
+<div class="page" id="page-score">
+  <div class="status-bar">
+    <div class="status-dot"></div>
+    <span>即時同步中</span>
+    <span style="margin-left:auto;font-family:'DM Mono',monospace;font-weight:700;color:var(--green-dark)" id="scoreRoomCode"></span>
+  </div>
+
+  <div class="card" style="padding:12px 16px">
+    <div class="info-row"><span>球場</span><strong id="scoreCourse">-</strong></div>
+    <div class="info-row" style="margin:0"><span>模式</span><strong id="scoreMode">-</strong></div>
+  </div>
+
+  <!-- Hole tabs for mobile quick nav -->
+  <div class="hole-tabs" id="holeTabs"></div>
+
+  <div class="card" style="padding:12px 8px">
+    <div class="scorecard-wrap">
+      <table class="scorecard" id="scorecardTable">
+        <thead></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <button class="btn btn-outline btn-danger" style="margin-top:8px;color:var(--red);border-color:var(--red)" onclick="leaveGame()">離開球局</button>
+</div>
+
+<!-- Firebase SDK -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getDatabase, ref, set, get, update, onValue, off, push, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+// ── FIREBASE CONFIG ──────────────────────────────────────
+const firebaseConfig = {
+  apiKey: "AIzaSyCtZjzSV2hVdlCGLDh1-Z1opaUP9GvTjjk",
+  authDomain: "golf-score-9ae2b.firebaseapp.com",
+  databaseURL: "https://golf-score-9ae2b-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "golf-score-9ae2b",
+  storageBucket: "golf-score-9ae2b.firebasestorage.app",
+  messagingSenderId: "321905525728",
+  appId: "1:321905525728:web:cb75d7f9093fb285e86185"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getDatabase(app);
+
+// ── STATE ────────────────────────────────────────────────
+let currentUser = null;
+let currentGameId = null;
+let gameListener = null;
+const PAR_DEFAULTS = [4,3,5,4,4,3,4,5,4, 4,3,5,4,4,3,4,5,4]; // default 18-hole par
+
+// ── AUTH STATE ───────────────────────────────────────────
+onAuthStateChanged(auth, user => {
+  if (user) {
+    currentUser = user;
+    document.getElementById('headerUser').style.display = 'flex';
+    document.getElementById('headerName').textContent = user.displayName?.split(' ')[0] || '球友';
+    const av = document.getElementById('headerAvatar');
+    if (user.photoURL) {
+      av.innerHTML = `<img src="${user.photoURL}" />`;
+    } else {
+      av.textContent = (user.displayName || 'U')[0].toUpperCase();
+    }
+    document.getElementById('welcomeName').textContent = `${user.displayName?.split(' ')[0] || '球友'}，您好！`;
+    showPage('page-home');
+    loadMyGames();
+  } else {
+    currentUser = null;
+    document.getElementById('headerUser').style.display = 'none';
+    showPage('page-login');
+  }
+});
+
+// ── LOGIN ────────────────────────────────────────────────
+window.signInWithGoogle = async () => {
+  document.getElementById('loginLoading').style.display = 'block';
+  document.getElementById('loginError').style.display = 'none';
+  try {
+    const provider = new GoogleAuthProvider();
+    await signInWithPopup(auth, provider);
+  } catch(e) {
+    document.getElementById('loginLoading').style.display = 'none';
+    document.getElementById('loginError').style.display = 'block';
+    document.getElementById('loginError').textContent = '登入失敗：' + e.message;
+  }
+};
+
+// ── GENERATE ROOM CODE ───────────────────────────────────
+function generateCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for(let i=0;i<4;i++) code += chars[Math.floor(Math.random()*chars.length)];
+  return code;
+}
+
+// ── CREATE GAME ──────────────────────────────────────────
+window.createGame = async () => {
+  const course = document.getElementById('createCourse').value.trim();
+  const holes = parseInt(document.getElementById('createHoles').value);
+  const mode = document.getElementById('createMode').value;
+  if (!course) {
+    showError('createError', '請輸入球場名稱');
+    return;
+  }
+  let code = generateCode();
+  // ensure unique
+  const snap = await get(ref(db, `games/${code}`));
+  if (snap.exists()) code = generateCode();
+
+  const gameData = {
+    code,
+    course,
+    holes,
+    mode,
+    status: 'lobby',
+    hostUid: currentUser.uid,
+    createdAt: Date.now(),
+    players: {
+      [currentUser.uid]: {
+        name: currentUser.displayName || '球友',
+        photo: currentUser.photoURL || '',
+        joinedAt: Date.now()
+      }
+    },
+    scores: {}
+  };
+
+  await set(ref(db, `games/${code}`), gameData);
+  currentGameId = code;
+  enterLobby(code);
+};
+
+// ── JOIN GAME ────────────────────────────────────────────
+window.joinGame = async () => {
+  const code = document.getElementById('joinCode').value.trim().toUpperCase();
+  if (code.length !== 4) {
+    showError('joinError', '請輸入 4 碼房間碼');
+    return;
+  }
+  const snap = await get(ref(db, `games/${code}`));
+  if (!snap.exists()) {
+    showError('joinError', '找不到這個球局，請確認房間碼');
+    return;
+  }
+  const game = snap.val();
+  if (game.status === 'finished') {
+    showError('joinError', '這個球局已結束');
+    return;
+  }
+  const playerCount = Object.keys(game.players || {}).length;
+  if (playerCount >= 4 && !game.players[currentUser.uid]) {
+    showError('joinError', '球局已滿 4 人');
+    return;
+  }
+  // add player
+  await update(ref(db, `games/${code}/players/${currentUser.uid}`), {
+    name: currentUser.displayName || '球友',
+    photo: currentUser.photoURL || '',
+    joinedAt: Date.now()
+  });
+  currentGameId = code;
+  if (game.status === 'playing') {
+    enterScorecard(code);
+  } else {
+    enterLobby(code);
+  }
+};
+
+// ── ENTER LOBBY ──────────────────────────────────────────
+function enterLobby(code) {
+  showPage('page-lobby');
+  document.getElementById('lobbyCode').textContent = code;
+  if (gameListener) off(ref(db, `games/${currentGameId}`));
+  gameListener = onValue(ref(db, `games/${code}`), snap => {
+    if (!snap.exists()) { showPage('page-home'); return; }
+    const game = snap.val();
+    document.getElementById('lobbyCourse').textContent = game.course;
+    document.getElementById('lobbyHoles').textContent = game.holes + ' 洞';
+    document.getElementById('lobbyMode').textContent = game.mode === 'stroke' ? '筆數賽' : '比洞賽';
+    const players = game.players || {};
+    const pArr = Object.entries(players);
+    document.getElementById('playerCount').textContent = pArr.length;
+    const list = document.getElementById('lobbyPlayerList');
+    list.innerHTML = pArr.map(([uid, p]) => `
+      <div class="player-item">
+        <div class="player-avatar-sm">${p.photo ? `<img src="${p.photo}"/>` : p.name[0]}</div>
+        <div class="player-name">${p.name}</div>
+        ${uid === game.hostUid ? '<span class="player-badge badge-host">主持人</span>' : ''}
+        ${uid === currentUser.uid ? '<span class="player-badge badge-you">我</span>' : ''}
+      </div>
+    `).join('');
+    // show start button only to host & >= 2 players
+    const startBtn = document.getElementById('startGameBtn');
+    if (game.hostUid === currentUser.uid && pArr.length >= 2) {
+      startBtn.style.display = 'flex';
+    } else if (game.hostUid === currentUser.uid) {
+      startBtn.style.display = 'flex';
+      startBtn.textContent = `等待球友加入（目前 ${pArr.length} 人）`;
+    } else {
+      startBtn.style.display = 'none';
+    }
+    if (game.status === 'playing') {
+      enterScorecard(code);
+    }
+  });
+}
+
+// ── START GAME ───────────────────────────────────────────
+window.startGame = async () => {
+  await update(ref(db, `games/${currentGameId}`), { status: 'playing' });
+};
+
+// ── ENTER SCORECARD ──────────────────────────────────────
+function enterScorecard(code) {
+  if (gameListener) off(ref(db, `games/${currentGameId}`));
+  showPage('page-score');
+  document.getElementById('scoreRoomCode').textContent = code;
+  gameListener = onValue(ref(db, `games/${code}`), snap => {
+    if (!snap.exists()) return;
+    renderScorecard(snap.val());
+  });
+}
+
+// ── RENDER SCORECARD ─────────────────────────────────────
+function renderScorecard(game) {
+  document.getElementById('scoreCourse').textContent = game.course;
+  document.getElementById('scoreMode').textContent = game.mode === 'stroke' ? '筆數賽' : '比洞賽';
+
+  const holes = game.holes || 18;
+  const par = PAR_DEFAULTS.slice(0, holes);
+  const players = Object.entries(game.players || {});
+  const scores = game.scores || {};
+
+  // Build hole tabs
+  const tabsEl = document.getElementById('holeTabs');
+  tabsEl.innerHTML = Array.from({length: holes}, (_,i) => {
+    const h = i+1;
+    const hasScore = players.some(([uid]) => scores[uid]?.[`h${h}`] !== undefined);
+    return `<div class="hole-tab ${hasScore?'has-score':''}" onclick="scrollToHole(${h})">${h}</div>`;
+  }).join('');
+
+  // Build table
+  const thead = document.querySelector('#scorecardTable thead');
+  const tbody = document.querySelector('#scorecardTable tbody');
+
+  // Header row
+  let hdr = '<tr><th>球員</th>';
+  for(let i=1;i<=holes;i++) hdr += `<th id="th-h${i}">${i}</th>`;
+  hdr += '<th>Total</th></tr>';
+  thead.innerHTML = hdr;
+
+  // Par row
+  let parRow = '<tr class="par-row"><td>Par</td>';
+  const totalPar = par.reduce((a,b)=>a+b,0);
+  for(let i=0;i<holes;i++) parRow += `<td>${par[i]}</td>`;
+  parRow += `<td>${totalPar}</td></tr>`;
+
+  // Player rows
+  let rows = parRow;
+  players.forEach(([uid, player]) => {
+    const isMe = uid === currentUser.uid;
+    let total = 0;
+    let row = `<tr><td>${isMe ? '⭐ ' : ''}${player.name.split(' ')[0]}</td>`;
+    for(let i=1;i<=holes;i++) {
+      const val = scores[uid]?.[`h${i}`];
+      const diff = val !== undefined ? val - par[i-1] : null;
+      let cls = '';
+      if(diff !== null) {
+        if(diff <= -2) cls = 'eagle';
+        else if(diff === -1) cls = 'birdie';
+        else if(diff === 1) cls = 'bogey';
+        else if(diff >= 2) cls = 'double';
+        total += val;
+      }
+      if(isMe) {
+        row += `<td><input class="score-cell-input ${cls}" id="score-${uid}-h${i}" type="number" min="1" max="15" value="${val!==undefined?val:''}" placeholder="${par[i-1]}" onchange="saveScore('${uid}','h${i}',this.value)" oninput="colorInput(this,${par[i-1]})" /></td>`;
+      } else {
+        row += `<td style="font-family:'DM Mono',monospace;font-weight:600;color:${getScoreColor(diff)}">${val !== undefined ? val : '-'}</td>`;
+      }
+    }
+    row += `<td class="total-cell">${total > 0 ? total : '-'}</td></tr>`;
+    rows += row;
+  });
+
+  tbody.innerHTML = rows;
+}
+
+function getScoreColor(diff) {
+  if(diff === null) return '#999';
+  if(diff <= -2) return '#b45309';
+  if(diff === -1) return '#16a34a';
+  if(diff === 0) return '#1a1a1a';
+  if(diff === 1) return '#dc2626';
+  return '#991b1b';
+}
+
+window.colorInput = (el, par) => {
+  const val = parseInt(el.value);
+  el.className = 'score-cell-input';
+  if(!val) return;
+  const diff = val - par;
+  if(diff <= -2) el.classList.add('eagle');
+  else if(diff === -1) el.classList.add('birdie');
+  else if(diff === 1) el.classList.add('bogey');
+  else if(diff >= 2) el.classList.add('double');
+};
+
+window.saveScore = async (uid, hole, val) => {
+  if (!val || isNaN(parseInt(val))) return;
+  const score = parseInt(val);
+  if (score < 1 || score > 20) return;
+  await update(ref(db, `games/${currentGameId}/scores/${uid}`), { [hole]: score });
+  showToast('✅ 已儲存');
+};
+
+window.scrollToHole = (h) => {
+  const th = document.getElementById(`th-h${h}`);
+  if(th) th.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+};
+
+// ── LEAVE GAME ───────────────────────────────────────────
+window.leaveGame = () => {
+  if(gameListener) off(ref(db, `games/${currentGameId}`));
+  gameListener = null;
+  currentGameId = null;
+  showPage('page-home');
+  loadMyGames();
+};
+
+// ── LOAD MY GAMES ────────────────────────────────────────
+async function loadMyGames() {
+  // Simple: just show nothing for now (would need index query in real app)
+  document.getElementById('myGamesSection').style.display = 'none';
+}
+
+// ── HELPERS ──────────────────────────────────────────────
+window.showPage = (id) => {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  window.scrollTo(0, 0);
+};
+
+function showError(id, msg) {
+  const el = document.getElementById(id);
+  el.style.display = 'block';
+  el.textContent = msg;
+}
+
+let toastTimer;
+window.showToast = (msg) => {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2500);
+};
+
+</script>
+</body>
+</html>
