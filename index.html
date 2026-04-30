@@ -4963,7 +4963,11 @@ function mpEnterGame(code, game) {
   // 監聽 players 變化（底部 bar 和中途加入）
   if (mpGameListener) off(ref(db, `games/${mpGameId}`));
   mpGameListener = onValue(ref(db, `games/${code}/players`), snap => {
-    if (!snap.exists()) return;
+    if (!snap.exists()) {
+      // 主持人已刪除球局，強制離開
+      mpForceLeave();
+      return;
+    }
     const players = snap.val();
     const g = { players, fields: null };
     // 更新底部 bar
@@ -4980,7 +4984,7 @@ function mpEnterGame(code, game) {
   let mpFieldsListener = null;
   if (mpFieldsListener) off(ref(db, `games/${code}/fields`));
   mpFieldsListener = onValue(ref(db, `games/${code}/fields`), snap => {
-    if (!snap.exists()) return;
+    if (!snap.exists()) return; // fields 可能一開始是空的，不需要強制離開
     const fields = snap.val();
     if (fields) mpApplyFields(fields);
   });
@@ -5293,31 +5297,30 @@ function mpFillPlayersFromLobby(game) {
 
 // ── FILL LATE JOINING PLAYER ─────────────────────────────
 function mpFillLatePlayer(game, prevPlayerCount) {
-  // 有新玩家中途加入，只把還沒填的名字補進空白欄位
+  // 有新玩家中途加入，寫入 Firebase fields，讓所有人同步
   const players = Object.entries(game.players || {});
 
-  // 取得目前已填的名字
+  // 取得目前 Firebase fields 已有的名字
   const filledNames = [];
   for (let i = 0; i < 4; i++) {
     const el = document.getElementById(`name${i}`);
     if (el && el.value.trim()) filledNames.push(el.value.trim());
   }
 
-  // 找出還沒有對應欄位的新玩家
+  // 找出還沒有對應欄位的新玩家，寫入下一個空白位置
   const newPlayers = players.filter(([uid, p]) => !filledNames.includes(p.name));
   if (newPlayers.length === 0) return;
 
-  // 找空白的欄位填入
   let newIdx = 0;
   for (let i = 0; i < 4 && newIdx < newPlayers.length; i++) {
     const el = document.getElementById(`name${i}`);
     if (el && !el.value.trim()) {
-      el.value = newPlayers[newIdx][1].name;
-      el.dispatchEvent(new Event('input', { bubbles: true }));
+      const name = newPlayers[newIdx][1].name;
+      // 直接寫入 Firebase，讓所有人同步
+      if (mpGameId) mpWriteField(`name${i}`, name);
       newIdx++;
     }
   }
-  if (typeof updateNames === 'function') updateNames(true);
 }
 
 // ── FIELD-LEVEL SYNC ─────────────────────────────────────
@@ -5359,6 +5362,21 @@ function mpHookAutoSave() {
   document.addEventListener('input', mpOnDomChange, true);
   document.addEventListener('change', mpOnDomChange, true);
   document.addEventListener('click', mpOnDomChange, true);
+
+  // 直接 patch toggleMainMode，確保比賽模式同步
+  if (typeof toggleMainMode === 'function' && !toggleMainMode._mpPatched) {
+    const _orig = toggleMainMode;
+    window.toggleMainMode = function(id) {
+      _orig(id);
+      if (!mpIsApplyingRemote && mpGameId) {
+        setTimeout(async () => {
+          const val = !!document.getElementById(id)?.checked;
+          await mpWriteField(id, val);
+        }, 30);
+      }
+    };
+    window.toggleMainMode._mpPatched = true;
+  }
 }
 
 async function mpOnDomChange(e) {
@@ -5425,6 +5443,20 @@ async function mpWriteField(key, val) {
 // mpSyncTimer 保留但不再使用（留給 mpScheduleSync 相容性）
 function mpScheduleSync() {}
 
+// ── FORCE LEAVE (球局被刪除時) ───────────────────────────
+function mpForceLeave() {
+  if (mpGameListener) { off(ref(db, `games/${mpGameId}/players`)); mpGameListener = null; }
+  if (window._mpFieldsListener) { off(ref(db, `games/${window._mpFieldsListener.code}/fields`)); window._mpFieldsListener = null; }
+  mpGameId = null; mpIsHost = false; mpLastPlayerCount = 0;
+  document.getElementById('mp-bar').classList.remove('show');
+  document.body.classList.remove('mp-active');
+  document.getElementById('mp-overlay').classList.remove('hide');
+  document.removeEventListener('input', mpOnDomChange, true);
+  document.removeEventListener('change', mpOnDomChange, true);
+  document.removeEventListener('click', mpOnDomChange, true);
+  mpShowScreen('home');
+}
+
 // ── LEAVE GAME ───────────────────────────────────────────
 window.mpLeaveGame = async () => {
   const gameId = mpGameId;
@@ -5438,15 +5470,14 @@ window.mpLeaveGame = async () => {
   document.removeEventListener('input', mpOnDomChange, true);
   document.removeEventListener('change', mpOnDomChange, true);
   document.removeEventListener('click', mpOnDomChange, true);
-  // 清除 Firebase 球局資料
+  // 清除 Firebase 球局資料：所有人都只移除自己
   if (gameId) {
     try {
-      if (isHost) {
-        // 主持人離開：刪除整個球局
+      await remove(ref(db, `games/${gameId}/players/${mpUser.uid}`));
+      // 確認是否還有其他玩家，沒有的話刪整個球局
+      const snap = await get(ref(db, `games/${gameId}/players`));
+      if (!snap.exists() || Object.keys(snap.val() || {}).length === 0) {
         await remove(ref(db, `games/${gameId}`));
-      } else {
-        // 非主持人：只移除自己
-        await remove(ref(db, `games/${gameId}/players/${mpUser.uid}`));
       }
     } catch(e) { console.error('mpLeaveGame cleanup error', e); }
   }
