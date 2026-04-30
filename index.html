@@ -4740,7 +4740,7 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult, signInAnonymously, onAuthStateChanged, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getDatabase, ref, set, get, update, remove, onValue, off } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+import { getDatabase, ref, set, get, update, remove, onValue, off, child } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
 // ── CONFIG ───────────────────────────────────────────────
 const firebaseConfig = {
@@ -4907,20 +4907,23 @@ function mpEnterLobby(code) {
 }
 
 window.mpStartGame = async () => {
-  // 先清除 localStorage 舊資料，再收集當前 DOM 狀態
-  localStorage.removeItem('golfAutoSaveBeta15');
+  // 取得等待室球友，建立初始 fields
+  const snap = await get(ref(db, `games/${mpGameId}`));
+  if (!snap.exists()) return;
+  const game = snap.val();
+  const players = Object.entries(game.players || {});
+  const sorted = [
+    ...players.filter(([uid]) => uid === mpUser.uid),
+    ...players.filter(([uid]) => uid !== mpUser.uid)
+  ];
 
-  // 等 DOM 穩定後收集狀態寫進 Firebase
-  setTimeout(async () => {
-    let currentState = null;
-    try {
-      if (typeof collectAppState === 'function') currentState = collectAppState();
-    } catch(e) {}
-    await update(ref(db, `games/${mpGameId}`), { 
-      status: 'playing', 
-      state: currentState
-    });
-  }, 100);
+  // 初始 fields：只有玩家名字，其他設定等主持人在設定頁操作後即時同步
+  const initFields = {};
+  sorted.forEach(([uid, p], idx) => { initFields[`name${idx}`] = p.name; });
+
+  // 清除舊 fields，寫入新的初始資料
+  await set(ref(db, `games/${mpGameId}/fields`), initFields);
+  await update(ref(db, `games/${mpGameId}`), { status: 'playing', state: null });
 };
 
 
@@ -4945,50 +4948,158 @@ function mpEnterGame(code, game) {
   bar.classList.add('show');
   document.getElementById('mpBarCode').textContent = code;
 
-  // 強制清除 localStorage 的舊資料，確保不帶入任何前一局的資訊
+  // 清除 localStorage 舊資料
   localStorage.removeItem('golfAutoSaveBeta15');
+  // 清空 DOM
+  if (typeof clearCurrentRoundData === 'function') clearCurrentRoundData(false);
 
-  // 如果有儲存的狀態，套用；新球局（無狀態）則清空名字並帶入球友
-  if (game.state) {
-    // 先清空再套用，確保舊資料不殘留
-    if (typeof clearCurrentRoundData === 'function') clearCurrentRoundData(false);
-    setTimeout(() => mpApplyRemoteState(game.state), 300);
+  // 如果有 fields 資料，套用；否則填入球友名字
+  if (game.fields && Object.keys(game.fields).length > 0) {
+    mpApplyFields(game.fields);
   } else {
     mpFillPlayersFromLobby(game);
   }
 
-  // 監聽 Firebase 更新
+  // 監聽 players 變化（底部 bar 和中途加入）
   if (mpGameListener) off(ref(db, `games/${mpGameId}`));
-  mpGameListener = onValue(ref(db, `games/${code}`), snap => {
+  mpGameListener = onValue(ref(db, `games/${code}/players`), snap => {
     if (!snap.exists()) return;
-    const g = snap.val();
-    // 更新底部 bar 球友清單（依玩家1-4順序，自己排第一）
+    const players = snap.val();
+    const g = { players, fields: null };
+    // 更新底部 bar
     mpUpdateBarPlayers(g);
-    // 中途加入的新玩家：補填名字
-    const currentPlayerCount = Object.keys(g.players || {}).length;
-    if (!g.state && currentPlayerCount > (mpLastPlayerCount || 0)) {
-      mpFillLatePlayer(g, mpLastPlayerCount || 0);
+    // 中途加入的新玩家
+    const currentPlayerCount = Object.keys(players || {}).length;
+    if (currentPlayerCount > (mpLastPlayerCount || 0)) {
+      mpFillLatePlayer({ players }, mpLastPlayerCount || 0);
     }
     mpLastPlayerCount = currentPlayerCount;
-    // 套用遠端狀態（防迴圈 + 防搶 focus）
-    if (g.state && !mpIsApplyingRemote) {
-      const active = document.activeElement;
-      const isTyping = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT');
-      if (isTyping) {
-        const pendingState = g.state;
-        const applyWhenDone = () => {
-          active.removeEventListener('blur', applyWhenDone);
-          setTimeout(() => { if (!mpIsApplyingRemote) mpApplyRemoteState(pendingState); }, 300);
-        };
-        active.addEventListener('blur', applyWhenDone);
-      } else {
-        mpApplyRemoteState(g.state);
-      }
-    }
   });
 
-  // 攔截 scheduleAutoSave，改成同步到 Firebase
+  // 監聽 fields 節點（所有設定和成績的即時同步）
+  let mpFieldsListener = null;
+  if (mpFieldsListener) off(ref(db, `games/${code}/fields`));
+  mpFieldsListener = onValue(ref(db, `games/${code}/fields`), snap => {
+    if (!snap.exists()) return;
+    const fields = snap.val();
+    if (fields) mpApplyFields(fields);
+  });
+  // 把 fieldsListener 存起來，離開時清除
+  window._mpFieldsListener = { code, listener: mpFieldsListener };
+
+  // 啟動同步
   mpHookAutoSave();
+}
+
+// ── APPLY FIELDS ─────────────────────────────────────────
+// 把 Firebase fields 節點的值直接套到 DOM
+function mpApplyFields(fields) {
+  if (!fields) return;
+  mpIsApplyingRemote = true;
+  try {
+    let needRenderScoreboard = false;
+    let needRenderMode = false;
+    let needUpdateNames = false;
+
+    // 球場
+    if ('savedCourse' in fields) {
+      if (mpSetVal('savedCourseSelect', fields.savedCourse)) {
+        if (typeof handleSavedCourseSelect === 'function') handleSavedCourseSelect();
+        needRenderScoreboard = true;
+      }
+    }
+    if ('startHole' in fields && mpSetVal('startHole', fields.startHole)) needRenderScoreboard = true;
+
+    // 點數倍率
+    ['pointVal','mB','mE4','mE5','mHIO'].forEach(k => { if (k in fields) mpSetVal(k, fields[k]); });
+
+    // 比賽模式
+    ['modeVegas','extMode','modeMatch','modePar'].forEach(k => {
+      if (k in fields && mpSetVal(k, fields[k])) needRenderMode = true;
+    });
+    if (needRenderMode && typeof applyModeStates === 'function') applyModeStates();
+
+    // 玩家名字
+    for (let i=0; i<4; i++) {
+      const k = `name${i}`;
+      if (k in fields && mpSetVal(k, fields[k])) needUpdateNames = true;
+    }
+    if (needUpdateNames && typeof updateNames === 'function') updateNames(true);
+
+    // 玩家參賽
+    for (let i=0; i<4; i++) {
+      [`p${i}_m`, `p${i}_p`, `vegasRank${i}`].forEach(k => {
+        if (k in fields) mpSetVal(k, fields[k]);
+      });
+    }
+
+    // 讓洞配對
+    ['0_1','0_2','0_3','1_2','1_3','2_3'].forEach(k => {
+      const [a,b] = k.split('_');
+      if (`pair_checked_${k}` in fields && typeof setPairState === 'function') {
+        setPairState(Number(a), Number(b), !!fields[`pair_checked_${k}`], String(fields[`pair_val_${k}`]||'0'), true);
+      }
+      if (`pair_val_${k}` in fields) mpSetVal(`pair-strokes-${a}-${b}`, fields[`pair_val_${k}`]);
+      if (`pair_mode_${k}` in fields && typeof setPairHandicapMode === 'function') {
+        setPairHandicapMode(Number(a), Number(b), fields[`pair_mode_${k}`] || 'general', true);
+      }
+      if (`pair_offset_${k}` in fields) {
+        mpSetVal(`pair-offset-${a}-${b}`, fields[`pair_offset_${k}`]);
+        const box = document.getElementById(`pair-offset-box-${a}-${b}`);
+        if (box) box.classList.toggle('active', !!fields[`pair_offset_${k}`]);
+      }
+      ['p3','p4','p5'].forEach(kind => {
+        const fk = `pair_${kind}_${k}`;
+        if (fk in fields) mpSetVal(`pair-special-${kind}-${a}-${b}`, fields[fk]);
+      });
+    });
+
+    // 渲染
+    if (needRenderScoreboard && typeof renderScoreboard === 'function') renderScoreboard();
+
+    // 成績（跳過正在輸入的格子）
+    const focusedId = document.activeElement?.id;
+    for (let i=0; i<4; i++) {
+      for (let h=1; h<=18; h++) {
+        const fk = `score_${i}_${h}`;
+        if (!(fk in fields)) continue;
+        const cellId = `cell_${i}_${h}`;
+        if (cellId === focusedId) continue;
+        if (mpSetVal(cellId, fields[fk])) {
+          if (typeof drawMark === 'function') drawMark(i, h, false);
+        }
+      }
+    }
+    if (typeof updateParTotals === 'function') updateParTotals();
+    if (typeof getActivePlayers === 'function') {
+      getActivePlayers().forEach(p => {
+        if (typeof updatePlayerTotals === 'function') updatePlayerTotals(p);
+      });
+    }
+    if (typeof updateVegasPreview === 'function') updateVegasPreview();
+
+    // 讓洞記憶帶入
+    if (needUpdateNames || needRenderMode) {
+      setTimeout(() => {
+        if (typeof applyHdcpMemoryAndNotify === 'function') applyHdcpMemoryAndNotify();
+      }, 100);
+    }
+
+    // 更新底部 bar
+    const barNames = [];
+    for (let i=0; i<4; i++) {
+      const n = fields[`name${i}`] || document.getElementById(`name${i}`)?.value;
+      if (n && n.trim()) barNames.push(n.trim());
+    }
+    if (barNames.length > 0) {
+      document.getElementById('mpBarPlayers').textContent = barNames.join('、');
+    }
+
+  } catch(e) {
+    console.error('mpApplyFields error', e);
+  } finally {
+    setTimeout(() => { mpIsApplyingRemote = false; }, 100);
+  }
 }
 
 // ── APPLY REMOTE STATE ───────────────────────────────────
@@ -5209,71 +5320,99 @@ function mpFillLatePlayer(game, prevPlayerCount) {
   if (typeof updateNames === 'function') updateNames(true);
 }
 
-// ── HOOK AUTO SAVE ───────────────────────────────────────
-// 監聽特定元素的變化，即時同步到 Firebase
-const MP_WATCH_IDS = [
-  // 球場
-  'savedCourseSelect', 'startHole',
-  // 點數倍率
-  'pointVal', 'mB', 'mE4', 'mE5', 'mHIO',
-  // 比賽模式
-  'modeVegas', 'extMode', 'modeMatch', 'modePar',
-  // 玩家名字
-  'name0', 'name1', 'name2', 'name3',
-  // 玩家參賽
-  'p0_m','p1_m','p2_m','p3_m',
-  'p0_p','p1_p','p2_p','p3_p',
-  // 讓洞
-  ...['0_1','0_2','0_3','1_2','1_3','2_3'].flatMap(k => {
-    const [a,b] = k.split('_');
-    return [
-      `pair-toggle-${a}-${b}`,
-      `pair-strokes-${a}-${b}`,
-      `pair-offset-${a}-${b}`,
-      `pair-special-p3-${a}-${b}`,
-      `pair-special-p4-${a}-${b}`,
-      `pair-special-p5-${a}-${b}`,
-    ];
-  }),
-  // 成績
-  ...[0,1,2,3].flatMap(i => Array.from({length:18},(_,h)=>`cell_${i}_${h+1}`))
-];
+// ── FIELD-LEVEL SYNC ─────────────────────────────────────
+// 每個欄位獨立同步，不收集整個 DOM
+
+// 欄位 ID → Firebase key 的對應
+const MP_FIELD_MAP = {
+  'savedCourseSelect': 'savedCourse',
+  'startHole': 'startHole',
+  'pointVal': 'pointVal',
+  'mB': 'mB', 'mE4': 'mE4', 'mE5': 'mE5', 'mHIO': 'mHIO',
+  'modeVegas': 'modeVegas', 'extMode': 'extMode',
+  'modeMatch': 'modeMatch', 'modePar': 'modePar',
+  'name0': 'name0', 'name1': 'name1', 'name2': 'name2', 'name3': 'name3',
+  'p0_m': 'p0_m', 'p1_m': 'p1_m', 'p2_m': 'p2_m', 'p3_m': 'p3_m',
+  'p0_p': 'p0_p', 'p1_p': 'p1_p', 'p2_p': 'p2_p', 'p3_p': 'p3_p',
+  'vegasRank0': 'vegasRank0', 'vegasRank1': 'vegasRank1',
+  'vegasRank2': 'vegasRank2', 'vegasRank3': 'vegasRank3',
+};
+
+// 動態加入讓洞欄位
+['0_1','0_2','0_3','1_2','1_3','2_3'].forEach(k => {
+  const [a,b] = k.split('_');
+  MP_FIELD_MAP[`pair-strokes-${a}-${b}`] = `pair_val_${k}`;
+  MP_FIELD_MAP[`pair-offset-${a}-${b}`] = `pair_offset_${k}`;
+  MP_FIELD_MAP[`pair-special-p3-${a}-${b}`] = `pair_p3_${k}`;
+  MP_FIELD_MAP[`pair-special-p4-${a}-${b}`] = `pair_p4_${k}`;
+  MP_FIELD_MAP[`pair-special-p5-${a}-${b}`] = `pair_p5_${k}`;
+});
+
+// 動態加入成績欄位
+[0,1,2,3].forEach(i => {
+  for (let h=1; h<=18; h++) {
+    MP_FIELD_MAP[`cell_${i}_${h}`] = `score_${i}_${h}`;
+  }
+});
 
 function mpHookAutoSave() {
-  // 用事件委派監聽整個 document
   document.addEventListener('input', mpOnDomChange, true);
   document.addEventListener('change', mpOnDomChange, true);
   document.addEventListener('click', mpOnDomChange, true);
 }
 
-function mpOnDomChange(e) {
+async function mpOnDomChange(e) {
   if (mpIsApplyingRemote) return;
-  if (!e.target?.id || !MP_WATCH_IDS.includes(e.target.id)) return;
-  console.log('[MP] DOM change detected:', e.target.id, e.type);
-  mpScheduleSync();
+  if (!mpGameId) return;
+  const id = e.target?.id;
+  if (!id) return;
+
+  // 處理讓洞配對 toggle（pair-toggle-a-b）
+  if (id.startsWith('pair-toggle-')) {
+    const parts = id.split('-');
+    const a = parts[2], b = parts[3];
+    const key = `${a}_${b}`;
+    const checked = !!document.getElementById(`pair-check-${a}-${b}`)?.checked;
+    await mpWriteField(`pair_checked_${key}`, checked);
+    return;
+  }
+
+  // 處理讓洞 mode（pair-mode-a-b）
+  if (id.startsWith('pair-mode-')) {
+    const parts = id.split('-');
+    const a = parts[2], b = parts[3];
+    const key = `${a}_${b}`;
+    const val = document.getElementById(id)?.value || 'general';
+    await mpWriteField(`pair_mode_${key}`, val);
+    return;
+  }
+
+  const fbKey = MP_FIELD_MAP[id];
+  if (!fbKey) return;
+
+  const el = e.target;
+  const val = el.type === 'checkbox' ? el.checked : el.value;
+  await mpWriteField(fbKey, val);
 }
 
-function mpScheduleSync() {
-  if (mpIsApplyingRemote) return;
-  clearTimeout(mpSyncTimer);
-  mpSyncTimer = setTimeout(async () => {
-    if (!mpGameId) return;
-    try {
-      const state = collectAppState();
-      console.log('[MP] Syncing to Firebase, modeMatch:', state.modeMatch, 'modeVegas:', state.modeVegas);
-      await update(ref(db, `games/${mpGameId}`), { state });
-      console.log('[MP] Sync done');
-    } catch(e) {
-      console.error('mpSync error', e);
-    }
-  }, 300);
+async function mpWriteField(key, val) {
+  if (!mpGameId) return;
+  try {
+    await update(ref(db, `games/${mpGameId}/fields`), { [key]: val });
+  } catch(e) {
+    console.error('mpWriteField error', key, e);
+  }
 }
+
+// mpSyncTimer 保留但不再使用（留給 mpScheduleSync 相容性）
+function mpScheduleSync() {}
 
 // ── LEAVE GAME ───────────────────────────────────────────
 window.mpLeaveGame = async () => {
   const gameId = mpGameId;
   const isHost = mpIsHost;
-  if (mpGameListener) { off(ref(db, `games/${gameId}`)); mpGameListener = null; }
+  if (mpGameListener) { off(ref(db, `games/${gameId}/players`)); mpGameListener = null; }
+  if (window._mpFieldsListener) { off(ref(db, `games/${window._mpFieldsListener.code}/fields`)); window._mpFieldsListener = null; }
   mpGameId = null; mpIsHost = false; mpLastPlayerCount = 0;
   document.getElementById('mp-bar').classList.remove('show');
   document.body.classList.remove('mp-active');
