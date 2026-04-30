@@ -4343,6 +4343,38 @@
           }
         };
       });
+
+      // ── 扁平欄位（供 mpApplyRemoteState 直接比對）──
+      state.savedCourse = document.getElementById('savedCourseSelect')?.value || '';
+      state.mB = state.multipliers.mB;
+      state.mE4 = state.multipliers.mE4;
+      state.mE5 = state.multipliers.mE5;
+      state.mHIO = state.multipliers.mHIO;
+      state.modeVegas = state.modes.vegas;
+      state.extMode = state.modes.ext;
+      state.modeMatch = state.modes.match;
+      state.modePar = state.modes.par;
+      playerIDs.forEach(i => {
+        state[`name${i}`] = state.players[i].name;
+        state[`p${i}_m`] = state.players[i].match;
+        state[`p${i}_p`] = state.players[i].par;
+        state[`vegasRank${i}`] = state.players[i].vegasRank;
+      });
+      pairKeys.forEach(key => {
+        const [a,b] = key.split('_');
+        const pair = state.pairs[key];
+        state[`pair_checked_${key}`] = pair.checked;
+        state[`pair_val_${key}`] = pair.value;
+        state[`pair_mode_${key}`] = pair.mode;
+        state[`pair_offset_${key}`] = pair.offset;
+        state[`pair_p3_${key}`] = pair.special.p3;
+        state[`pair_p4_${key}`] = pair.special.p4;
+        state[`pair_p5_${key}`] = pair.special.p5;
+      });
+      playerIDs.forEach(i => {
+        for (let h=1; h<=18; h++) state[`score_${i}_${h}`] = state.scores[`${i}_${h}`];
+      });
+
       return state;
     }
 
@@ -4875,16 +4907,20 @@ function mpEnterLobby(code) {
 }
 
 window.mpStartGame = async () => {
-  // 先把主持人目前的設定狀態寫進 Firebase，再開始球局
-  // 這樣加入者進來就能收到正確的模式設定
-  let currentState = null;
-  try {
-    if (typeof collectAppState === 'function') currentState = collectAppState();
-  } catch(e) {}
-  await update(ref(db, `games/${mpGameId}`), { 
-    status: 'playing', 
-    state: currentState  // 帶入主持人目前的設定（含比賽模式）
-  });
+  // 先清除 localStorage 舊資料，再收集當前 DOM 狀態
+  localStorage.removeItem('golfAutoSaveBeta15');
+
+  // 等 DOM 穩定後收集狀態寫進 Firebase
+  setTimeout(async () => {
+    let currentState = null;
+    try {
+      if (typeof collectAppState === 'function') currentState = collectAppState();
+    } catch(e) {}
+    await update(ref(db, `games/${mpGameId}`), { 
+      status: 'playing', 
+      state: currentState
+    });
+  }, 100);
 };
 
 
@@ -5070,10 +5106,47 @@ function mpFillLatePlayer(game, prevPlayerCount) {
 }
 
 // ── HOOK AUTO SAVE ───────────────────────────────────────
+// 監聽特定元素的變化，即時同步到 Firebase
+const MP_WATCH_IDS = [
+  // 球場
+  'savedCourseSelect', 'startHole',
+  // 點數倍率
+  'pointVal', 'mB', 'mE4', 'mE5', 'mHIO',
+  // 比賽模式
+  'modeVegas', 'extMode', 'modeMatch', 'modePar',
+  // 玩家名字
+  'name0', 'name1', 'name2', 'name3',
+  // 玩家參賽
+  'p0_m','p1_m','p2_m','p3_m',
+  'p0_p','p1_p','p2_p','p3_p',
+  // 讓洞
+  ...['0_1','0_2','0_3','1_2','1_3','2_3'].flatMap(k => {
+    const [a,b] = k.split('_');
+    return [
+      `pair-toggle-${a}-${b}`,
+      `pair-strokes-${a}-${b}`,
+      `pair-offset-${a}-${b}`,
+      `pair-special-p3-${a}-${b}`,
+      `pair-special-p4-${a}-${b}`,
+      `pair-special-p5-${a}-${b}`,
+    ];
+  }),
+  // 成績
+  ...[0,1,2,3].flatMap(i => Array.from({length:18},(_,h)=>`cell_${i}_${h+1}`))
+];
+
 function mpHookAutoSave() {
-  // 監聽任何 input/change，500ms 後同步到 Firebase
-  document.addEventListener('input', mpScheduleSync, true);
-  document.addEventListener('change', mpScheduleSync, true);
+  // 用事件委派監聽整個 document
+  document.addEventListener('input', mpOnDomChange, true);
+  document.addEventListener('change', mpOnDomChange, true);
+  document.addEventListener('click', mpOnDomChange, true);
+}
+
+function mpOnDomChange(e) {
+  if (mpIsApplyingRemote) return;
+  // 只有在監聽清單內的元素才觸發同步
+  if (!e.target?.id || !MP_WATCH_IDS.includes(e.target.id)) return;
+  mpScheduleSync();
 }
 
 function mpScheduleSync() {
@@ -5087,7 +5160,7 @@ function mpScheduleSync() {
     } catch(e) {
       console.error('mpSync error', e);
     }
-  }, 400);
+  }, 300);
 }
 
 // ── LEAVE GAME ───────────────────────────────────────────
@@ -5099,8 +5172,9 @@ window.mpLeaveGame = async () => {
   document.getElementById('mp-bar').classList.remove('show');
   document.body.classList.remove('mp-active');
   document.getElementById('mp-overlay').classList.remove('hide');
-  document.removeEventListener('input', mpScheduleSync, true);
-  document.removeEventListener('change', mpScheduleSync, true);
+  document.removeEventListener('input', mpOnDomChange, true);
+  document.removeEventListener('change', mpOnDomChange, true);
+  document.removeEventListener('click', mpOnDomChange, true);
   // 清除 Firebase 球局資料
   if (gameId) {
     try {
