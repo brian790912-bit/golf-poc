@@ -5144,8 +5144,8 @@ function mpHookAutoSave() {
 
 function mpOnDomChange(e) {
   if (mpIsApplyingRemote) return;
-  // 只有在監聽清單內的元素才觸發同步
   if (!e.target?.id || !MP_WATCH_IDS.includes(e.target.id)) return;
+  console.log('[MP] DOM change detected:', e.target.id, e.type);
   mpScheduleSync();
 }
 
@@ -5156,7 +5156,9 @@ function mpScheduleSync() {
     if (!mpGameId) return;
     try {
       const state = collectAppState();
+      console.log('[MP] Syncing to Firebase, modeMatch:', state.modeMatch, 'modeVegas:', state.modeVegas);
       await update(ref(db, `games/${mpGameId}`), { state });
+      console.log('[MP] Sync done');
     } catch(e) {
       console.error('mpSync error', e);
     }
