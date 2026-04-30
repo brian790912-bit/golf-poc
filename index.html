@@ -4346,6 +4346,12 @@
           }
         };
       });
+      // 加入球場下拉選單值（供 mpApplyState 使用）
+      state.savedCourse = document.getElementById('savedCourseSelect')?.value || '';
+      state.mB = state.multipliers.mB;
+      state.mE4 = state.multipliers.mE4;
+      state.mE5 = state.multipliers.mE5;
+      state.mHIO = state.multipliers.mHIO;
       return state;
     }
 
@@ -4485,71 +4491,121 @@
 
 <!-- ════════════════════════════════════════════════════════
      GOLF SCORE MULTI-PLAYER v2
-     架構：主持人完整設定，球友只看計分/結算
+     架構：主持人在等待室完成所有設定，球友只看計分/結算
 ════════════════════════════════════════════════════════ -->
 <style>
-/* ── 多人 overlay ── */
+/* ── 配色沿用系統 ── */
+:root {
+  --mp-bg: #f4f8f2;
+  --mp-green: #2f6b3f;
+  --mp-dark: #1e4d2b;
+  --mp-gold: #c9a84c;
+  --mp-text: #18311f;
+  --mp-gray: #7c8879;
+  --mp-border: #d6e2d3;
+  --mp-light: #eef4ec;
+}
+
 #mp-overlay {
   position: fixed; inset: 0;
-  background: #0f4524;
-  display: flex; align-items: center; justify-content: center;
-  z-index: 9999; padding: 20px;
+  background: var(--mp-bg);
+  z-index: 9999;
+  overflow-y: auto;
+  display: flex; flex-direction: column;
 }
 #mp-overlay.hide { display: none; }
 
-.mp-sheet {
-  background: #fff; border-radius: 20px;
-  width: min(440px, 100%);
-  box-shadow: 0 24px 48px rgba(0,0,0,0.35);
-  overflow: hidden; max-height: 90vh; overflow-y: auto;
+/* Header 跟系統一致 */
+.mp-header {
+  background: rgba(255,255,255,.96);
+  border-bottom: 1px solid var(--mp-border);
+  padding: 0 16px;
+  display: flex; align-items: center; justify-content: space-between;
+  height: 52px;
+  position: sticky; top: 0; z-index: 10;
 }
-.mp-head {
-  background: linear-gradient(180deg, #2f6b3f, #1e4d2b);
-  color: #fff; padding: 20px; text-align: center;
+.mp-header-title {
+  font-size: 15px; font-weight: 900; color: var(--mp-dark);
+  display: flex; align-items: center; gap: 8px;
 }
-.mp-head .mp-logo { font-size: 40px; margin-bottom: 6px; }
-.mp-head h2 { font-size: 20px; margin: 0 0 4px; }
-.mp-head p { font-size: 13px; opacity: 0.8; margin: 0; }
-.mp-body { padding: 20px; }
+.mp-header-action {
+  font-size: 13px; color: var(--mp-green); font-weight: 700;
+  background: none; border: none; cursor: pointer; font-family: inherit;
+}
 
+.mp-content { padding: 16px; max-width: 600px; margin: 0 auto; width: 100%; box-sizing: border-box; }
+
+/* 卡片跟系統一致 */
+.mp-card {
+  background: white;
+  border-radius: 16px;
+  border: 1.5px solid var(--mp-border);
+  padding: 16px;
+  margin-bottom: 12px;
+  box-shadow: 0 2px 8px rgba(24,49,31,.06);
+}
+.mp-card-title {
+  font-size: 13px; font-weight: 900; color: var(--mp-dark);
+  margin-bottom: 12px; display: flex; align-items: center; gap: 6px;
+}
+.mp-section-num {
+  width: 20px; height: 20px; border-radius: 50%;
+  background: var(--mp-green); color: white;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 900; flex-shrink: 0;
+}
+
+/* 按鈕跟系統一致 */
 .mp-btn {
-  display: flex; align-items: center; justify-content: center; gap: 8px;
-  width: 100%; padding: 13px; border-radius: 12px;
-  font-size: 15px; font-weight: 700; cursor: pointer;
-  border: none; transition: all 0.15s; font-family: inherit;
-  margin-bottom: 10px;
+  width: 100%; min-height: 48px; border: none; border-radius: 12px;
+  font-size: 15px; font-weight: 900; cursor: pointer;
+  font-family: inherit; display: flex; align-items: center;
+  justify-content: center; gap: 8px; margin-bottom: 8px;
+  transition: all 0.15s; -webkit-appearance: none;
 }
-.mp-btn:active { transform: scale(0.97); }
-.mp-btn-google { background: #fff; color: #333; border: 2px solid #ddd; }
-.mp-btn-google:hover { border-color: #999; }
-.mp-btn-primary { background: #2f6b3f; color: #fff; }
-.mp-btn-primary:hover { background: #1e4d2b; }
-.mp-btn-outline { background: transparent; color: #2f6b3f; border: 2px solid #2f6b3f; }
-.mp-btn-outline:hover { background: #2f6b3f; color: #fff; }
-.mp-btn-ghost { background: none; color: #999; font-size: 13px; border: none; }
-
-.mp-divider { display:flex; align-items:center; gap:10px; color:#999; font-size:12px; margin: 14px 0; }
-.mp-divider::before,.mp-divider::after { content:''; flex:1; height:1px; background:#eee; }
+.mp-btn:active { transform: scale(0.98); }
+.mp-btn-primary {
+  background: linear-gradient(180deg, #2f6b3f, #1e4d2b);
+  color: white; box-shadow: 0 6px 18px rgba(24,49,31,.12);
+}
+.mp-btn-outline {
+  background: white; color: var(--mp-green);
+  border: 2px solid var(--mp-green);
+}
+.mp-btn-ghost { background: none; color: var(--mp-gray); font-size: 13px; border: none; min-height: 36px; }
+.mp-btn-google { background: white; color: #333; border: 2px solid var(--mp-border); }
 
 .mp-input {
-  width: 100%; padding: 12px 14px;
-  border: 2px solid #d6e2d3; border-radius: 10px;
+  width: 100%; padding: 11px 14px;
+  border: 2px solid var(--mp-border); border-radius: 10px;
   font-size: 15px; font-family: inherit; outline: none;
-  margin-bottom: 10px; transition: border-color 0.15s;
-  box-sizing: border-box;
+  margin-bottom: 10px; box-sizing: border-box;
+  background: white; color: var(--mp-text); font-weight: 700;
+  transition: border-color 0.15s;
 }
-.mp-input:focus { border-color: #2f6b3f; }
+.mp-input:focus { border-color: var(--mp-green); }
 .mp-input.code-input {
-  font-family: monospace; font-size: 28px;
-  text-align: center; letter-spacing: 8px;
-  text-transform: uppercase;
+  font-family: monospace; font-size: 28px; text-align: center;
+  letter-spacing: 8px; text-transform: uppercase;
 }
-.mp-label { font-size: 12px; font-weight: 700; color: #7c8879; margin-bottom: 5px; display: block; text-transform: uppercase; letter-spacing: 0.5px; }
-.mp-error { background: #fee2e2; color: #b91c1c; border-radius: 8px; padding: 10px 14px; font-size: 13px; margin-bottom: 10px; display: none; }
+.mp-select {
+  width: 100%; padding: 11px 14px;
+  border: 2px solid var(--mp-border); border-radius: 10px;
+  font-size: 15px; font-family: inherit; outline: none;
+  margin-bottom: 10px; box-sizing: border-box;
+  background: white; color: var(--mp-text); font-weight: 700;
+  -webkit-appearance: none; cursor: pointer;
+}
+.mp-select:focus { border-color: var(--mp-green); }
 
-/* 房間碼顯示 */
-.mp-room-code {
-  background: #1e4d2b; color: #c9a84c;
+.mp-label { font-size: 12px; font-weight: 900; color: var(--mp-gray); margin-bottom: 5px; display: block; letter-spacing: 0.5px; }
+.mp-error { background: #fee2e2; color: #b91c1c; border-radius: 8px; padding: 10px 14px; font-size: 13px; margin-bottom: 10px; display: none; }
+.mp-divider { display:flex; align-items:center; gap:10px; color:var(--mp-gray); font-size:12px; margin: 12px 0; }
+.mp-divider::before,.mp-divider::after { content:''; flex:1; height:1px; background:var(--mp-border); }
+
+/* 房間碼 */
+.mp-room-code-box {
+  background: var(--mp-dark); color: var(--mp-gold);
   font-family: monospace; font-size: 36px; font-weight: 700;
   text-align: center; letter-spacing: 10px;
   padding: 16px; border-radius: 12px; margin: 8px 0;
@@ -4557,57 +4613,75 @@
 }
 .mp-copy-btn {
   display: flex; align-items: center; justify-content: center; gap: 6px;
-  width: 100%; background: rgba(201,168,76,0.15);
-  border: 1px solid rgba(201,168,76,0.4); color: #c9a84c;
-  border-radius: 8px; padding: 7px; font-size: 13px;
-  cursor: pointer; margin-bottom: 12px; font-family: inherit;
+  width: 100%; background: rgba(201,168,76,0.1);
+  border: 1px solid rgba(201,168,76,0.4); color: var(--mp-gold);
+  border-radius: 8px; padding: 8px; font-size: 13px; font-weight: 700;
+  cursor: pointer; margin-bottom: 12px; font-family: inherit; box-sizing: border-box;
 }
 
-/* 球員列表 */
-.mp-player-item {
+/* 玩家列表 */
+.mp-player-row {
   display: flex; align-items: center; gap: 10px;
-  padding: 9px 0; border-bottom: 1px solid #f0f4ef;
+  padding: 10px 0; border-bottom: 1px solid var(--mp-light);
 }
-.mp-player-item:last-child { border-bottom: none; }
+.mp-player-row:last-child { border-bottom: none; }
 .mp-avatar {
-  width: 34px; height: 34px; border-radius: 50%;
-  background: #2f6b3f; color: #fff;
+  width: 36px; height: 36px; border-radius: 50%;
+  background: var(--mp-green); color: white;
   display: flex; align-items: center; justify-content: center;
-  font-weight: 700; font-size: 13px; overflow: hidden; flex-shrink: 0;
+  font-weight: 900; font-size: 13px; flex-shrink: 0; overflow: hidden;
 }
 .mp-avatar img { width: 100%; height: 100%; object-fit: cover; }
-.mp-badge { font-size: 11px; padding: 2px 7px; border-radius: 20px; font-weight: 700; }
-.mp-badge-host { background: #c9a84c; color: #1e4d2b; }
-.mp-badge-you { background: #2f6b3f; color: #fff; }
+.mp-badge { font-size: 11px; padding: 2px 7px; border-radius: 20px; font-weight: 900; }
+.mp-badge-host { background: var(--mp-gold); color: var(--mp-dark); }
+.mp-badge-you { background: var(--mp-green); color: white; }
+
+/* 模式 checkbox 跟系統一致 */
+.mp-mode-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px; border-radius: 10px;
+  border: 2px solid var(--mp-border); margin-bottom: 8px;
+  cursor: pointer; transition: all 0.15s; background: white;
+}
+.mp-mode-row.active { border-color: var(--mp-green); background: rgba(47,107,63,.04); }
+.mp-mode-row.disabled { opacity: 0.4; pointer-events: none; }
+.mp-mode-label { font-size: 15px; font-weight: 900; color: var(--mp-text); flex: 1; }
+
+/* 讓洞設定 */
+.mp-pair-block {
+  padding: 10px 0; border-bottom: 1px solid var(--mp-light);
+}
+.mp-pair-block:last-child { border-bottom: none; }
+.mp-pair-title { font-size: 13px; font-weight: 900; color: var(--mp-dark); margin-bottom: 8px; }
+.mp-pair-input-row { display: flex; align-items: center; gap: 8px; }
+.mp-pair-input {
+  flex: 1; padding: 8px 12px; border: 2px solid var(--mp-border);
+  border-radius: 8px; font-size: 15px; font-weight: 700;
+  font-family: monospace; text-align: center; outline: none;
+  background: white; color: var(--mp-text);
+}
+.mp-pair-input:focus { border-color: var(--mp-green); }
 
 /* 底部 bar */
 #mp-bar {
   position: fixed; bottom: 0; left: 0; right: 0;
-  background: #1e4d2b; color: #fff;
+  background: var(--mp-dark); color: white;
   padding: 10px 16px;
   display: flex; align-items: center; gap: 10px;
-  z-index: 9000; box-shadow: 0 -2px 12px rgba(0,0,0,0.25);
+  z-index: 9000; box-shadow: 0 -2px 12px rgba(0,0,0,.2);
   font-size: 13px; transform: translateY(100%);
   transition: transform 0.3s ease;
 }
 #mp-bar.show { transform: translateY(0); }
-#mp-bar .mp-dot {
-  width: 8px; height: 8px; border-radius: 50%;
-  background: #4ade80; flex-shrink: 0;
-  animation: mppulse 2s infinite;
-}
+.mp-bar-dot { width: 8px; height: 8px; border-radius: 50%; background: #4ade80; flex-shrink: 0; animation: mppulse 2s infinite; }
 @keyframes mppulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
-#mp-bar .mp-bar-code { font-family: monospace; font-size: 15px; font-weight: 700; color: #c9a84c; letter-spacing: 3px; }
-#mp-bar .mp-bar-players { flex: 1; font-size: 12px; color: #a7c4ae; }
-#mp-bar .mp-leave-btn {
-  background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3);
-  color: #fff; border-radius: 8px; padding: 5px 12px;
-  font-size: 12px; cursor: pointer; flex-shrink: 0; font-family: inherit;
-}
+.mp-bar-code { font-family: monospace; font-size: 15px; font-weight: 900; color: var(--mp-gold); letter-spacing: 3px; }
+.mp-bar-players { flex: 1; font-size: 12px; color: #a7c4ae; }
+.mp-bar-leave { background: rgba(255,255,255,.15); border: 1px solid rgba(255,255,255,.3); color: white; border-radius: 8px; padding: 5px 12px; font-size: 12px; cursor: pointer; font-family: inherit; }
 
-/* 球友模式：隱藏設定頁面，只顯示計分和結算 */
+/* 球友模式 */
 body.guest-mode #setting { display: none !important; }
-body.guest-mode .tab-btn[data-tab="setting"] { display: none !important; }
+body.guest-mode #tab-set { display: none !important; }
 body.guest-mode { padding-bottom: 56px; }
 body.host-mode { padding-bottom: 56px; }
 
@@ -4615,13 +4689,26 @@ body.host-mode { padding-bottom: 56px; }
 #mp-toast {
   position: fixed; bottom: 70px; left: 50%;
   transform: translateX(-50%) translateY(60px);
-  background: #1e4d2b; color: #fff;
+  background: var(--mp-dark); color: white;
   padding: 10px 18px; border-radius: 24px;
-  font-size: 13px; font-weight: 500;
+  font-size: 13px; font-weight: 700;
   transition: transform 0.3s; z-index: 9998;
-  white-space: nowrap; box-shadow: 0 4px 14px rgba(0,0,0,0.3);
+  white-space: nowrap; box-shadow: 0 4px 14px rgba(0,0,0,.3);
+  pointer-events: none;
 }
 #mp-toast.show { transform: translateX(-50%) translateY(0); }
+
+/* 數字 input 同系統 */
+.mp-num-input {
+  border: 2px solid var(--mp-border); border-radius: 10px;
+  padding: 10px 14px; font-size: 15px; font-weight: 700;
+  font-family: inherit; text-align: center; outline: none;
+  background: white; color: var(--mp-text); width: 100%;
+  box-sizing: border-box;
+}
+.mp-num-input:focus { border-color: var(--mp-green); }
+.mp-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+.mp-grid-label { font-size: 11px; color: var(--mp-gray); font-weight: 700; margin-bottom: 4px; }
 </style>
 
 <!-- TOAST -->
@@ -4629,83 +4716,166 @@ body.host-mode { padding-bottom: 56px; }
 
 <!-- BOTTOM BAR -->
 <div id="mp-bar">
-  <div class="mp-dot"></div>
+  <div class="mp-bar-dot"></div>
   <span class="mp-bar-code" id="mpBarCode"></span>
   <span class="mp-bar-players" id="mpBarPlayers"></span>
-  <button class="mp-leave-btn" onclick="mpLeave()">離開球局</button>
+  <button class="mp-bar-leave" onclick="mpLeave()">離開球局</button>
 </div>
 
 <!-- OVERLAY -->
 <div id="mp-overlay">
 
-  <!-- 登入畫面 -->
-  <div class="mp-sheet" id="mp-screen-login">
-    <div class="mp-head">
-      <div class="mp-logo">⛳</div>
-      <h2>Golf Score</h2>
-      <p>多人即時計分</p>
+  <!-- ── 登入 ── -->
+  <div id="mp-screen-login" style="display:flex;flex-direction:column;min-height:100vh;justify-content:center;padding:24px;max-width:480px;margin:0 auto;width:100%;box-sizing:border-box">
+    <div style="text-align:center;margin-bottom:32px">
+      <div style="font-size:56px;margin-bottom:12px">⛳</div>
+      <div style="font-size:24px;font-weight:900;color:var(--mp-dark)">Golf Score</div>
+      <div style="font-size:14px;color:var(--mp-gray);margin-top:4px">多人即時計分</div>
     </div>
-    <div class="mp-body">
-      <button class="mp-btn mp-btn-google" onclick="mpGoogleLogin()">
-        <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
-        使用 Google 帳號登入
-      </button>
-      <div class="mp-divider">或</div>
-      <label class="mp-label">暱稱（不需要帳號）</label>
-      <input class="mp-input" id="mpAnonName" placeholder="例：小明、阿志" maxlength="10" />
-      <button class="mp-btn mp-btn-outline" onclick="mpAnonLogin()">快速進入</button>
-      <div class="mp-error" id="mpLoginError"></div>
-    </div>
+    <button class="mp-btn mp-btn-google" onclick="mpGoogleLogin()">
+      <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+      使用 Google 帳號登入
+    </button>
+    <div class="mp-divider">或</div>
+    <label class="mp-label">暱稱（不需要帳號）</label>
+    <input class="mp-input" id="mpAnonName" placeholder="例：小明、阿志" maxlength="10" />
+    <button class="mp-btn mp-btn-outline" onclick="mpAnonLogin()">快速進入</button>
+    <div class="mp-error" id="mpLoginError"></div>
   </div>
 
-  <!-- 首頁 -->
-  <div class="mp-sheet" id="mp-screen-home" style="display:none">
-    <div class="mp-head">
-      <div class="mp-logo">⛳</div>
-      <h2 id="mpWelcomeName">您好！</h2>
-      <p>建立球局或輸入房間碼加入</p>
+  <!-- ── 首頁 ── -->
+  <div id="mp-screen-home" style="display:none;flex-direction:column;min-height:100vh;justify-content:center;padding:24px;max-width:480px;margin:0 auto;width:100%;box-sizing:border-box">
+    <div style="text-align:center;margin-bottom:32px">
+      <div style="font-size:56px;margin-bottom:12px">⛳</div>
+      <div style="font-size:22px;font-weight:900;color:var(--mp-dark)" id="mpWelcomeName">您好！</div>
     </div>
-    <div class="mp-body">
-      <button class="mp-btn mp-btn-primary" onclick="mpCreateGame()">🏌️ 建立新球局</button>
-      <button class="mp-btn mp-btn-outline" onclick="mpShowScreen('join')">🤝 加入球局</button>
-      <div class="mp-divider"></div>
-      <button class="mp-btn mp-btn-ghost" onclick="mpLogout()">登出</button>
-    </div>
+    <button class="mp-btn mp-btn-primary" onclick="mpCreateGame()">🏌️ 建立新球局</button>
+    <button class="mp-btn mp-btn-outline" onclick="mpShowScreen('join')">🤝 加入球局</button>
+    <div class="mp-divider"></div>
+    <button class="mp-btn mp-btn-ghost" onclick="mpLogout()">登出</button>
   </div>
 
-  <!-- 加入球局 -->
-  <div class="mp-sheet" id="mp-screen-join" style="display:none">
-    <div class="mp-head" style="padding:16px 20px">
-      <h2 style="margin:0;font-size:17px">🤝 加入球局</h2>
-    </div>
-    <div class="mp-body">
+  <!-- ── 加入球局 ── -->
+  <div id="mp-screen-join" style="display:none;padding:24px;max-width:480px;margin:0 auto;width:100%;box-sizing:border-box">
+    <button onclick="mpShowScreen('home')" style="background:none;border:none;color:var(--mp-green);font-size:14px;font-weight:900;cursor:pointer;padding:0;margin-bottom:20px">← 返回</button>
+    <div class="mp-card">
+      <div class="mp-card-title">🤝 加入球局</div>
       <label class="mp-label">輸入房間碼</label>
       <input class="mp-input code-input" id="mpJoinCode" placeholder="ABCD" maxlength="4" />
       <div class="mp-error" id="mpJoinError"></div>
       <button class="mp-btn mp-btn-primary" onclick="mpJoinGame()">加入</button>
-      <button class="mp-btn mp-btn-ghost" onclick="mpShowScreen('home')">← 返回</button>
     </div>
   </div>
 
-  <!-- 等待室 -->
-  <div class="mp-sheet" id="mp-screen-lobby" style="display:none">
-    <div class="mp-head" style="padding:16px 20px">
-      <h2 style="margin:0;font-size:17px">⏳ 等待球友加入</h2>
+  <!-- ── 等待室 ── -->
+  <div id="mp-screen-lobby" style="display:none">
+    <div class="mp-header">
+      <div class="mp-header-title">⏳ 等待球友加入</div>
+      <button class="mp-header-action" onclick="mpLeave()">離開</button>
     </div>
-    <div class="mp-body">
-      <div class="mp-label">房間碼</div>
-      <div class="mp-room-code" id="mpLobbyCode" onclick="mpCopyCode()">----</div>
-      <button class="mp-copy-btn" onclick="mpCopyCode()">📋 複製房間碼</button>
-      <div class="mp-label">已加入（<span id="mpPlayerCount">0</span>/4 人）</div>
-      <div id="mpLobbyPlayerList" style="margin-bottom:14px"></div>
+    <div class="mp-content">
+
+      <!-- 房間碼 -->
+      <div class="mp-card">
+        <div class="mp-room-code-box" id="mpLobbyCode" onclick="mpCopyCode()">----</div>
+        <button class="mp-copy-btn" onclick="mpCopyCode()">📋 複製房間碼</button>
+        <div style="font-size:12px;color:var(--mp-gray);text-align:center">分享給球友，讓他們輸入這個碼加入</div>
+      </div>
+
+      <!-- 已加入球友 -->
+      <div class="mp-card">
+        <div class="mp-card-title"><span class="mp-section-num">👥</span> 已加入（<span id="mpPlayerCount">0</span>/4 人）</div>
+        <div id="mpLobbyPlayerList"></div>
+      </div>
+
+      <!-- 球場設定（主持人才能改） -->
+      <div class="mp-card" id="mpCourseCard">
+        <div class="mp-card-title"><span class="mp-section-num">1</span> 球場</div>
+        <label class="mp-label">選擇球場</label>
+        <select class="mp-select" id="mpLobbyCourse" onchange="mpOnLobbyChange()">
+          <option value="">請選擇已儲存球場</option>
+        </select>
+        <div class="mp-grid-2">
+          <div>
+            <div class="mp-grid-label">起始洞</div>
+            <input class="mp-num-input" type="number" id="mpLobbyStartHole" value="1" min="1" max="18" oninput="mpOnLobbyChange()" />
+          </div>
+          <div>
+            <div class="mp-grid-label">點數／元</div>
+            <input class="mp-num-input" type="number" id="mpLobbyPointVal" value="100" oninput="mpOnLobbyChange()" />
+          </div>
+        </div>
+        <div class="mp-grid-2">
+          <div>
+            <div class="mp-grid-label">Birdie 倍率</div>
+            <input class="mp-num-input" type="number" id="mpLobbyMB" value="2" oninput="mpOnLobbyChange()" />
+          </div>
+          <div>
+            <div class="mp-grid-label">4Par Eagle</div>
+            <input class="mp-num-input" type="number" id="mpLobbyME4" value="5" oninput="mpOnLobbyChange()" />
+          </div>
+        </div>
+        <div class="mp-grid-2">
+          <div>
+            <div class="mp-grid-label">5Par Eagle</div>
+            <input class="mp-num-input" type="number" id="mpLobbyME5" value="3" oninput="mpOnLobbyChange()" />
+          </div>
+          <div>
+            <div class="mp-grid-label">HIO 倍率</div>
+            <input class="mp-num-input" type="number" id="mpLobbyMHIO" value="10" oninput="mpOnLobbyChange()" />
+          </div>
+        </div>
+      </div>
+
+      <!-- 比賽模式（主持人才能改） -->
+      <div class="mp-card" id="mpModeCard">
+        <div class="mp-card-title"><span class="mp-section-num">2</span> 比賽模式</div>
+        <div class="mp-mode-row" id="mpModeRowVegas" onclick="mpToggleMode('Vegas')">
+          <input type="checkbox" id="mpModeVegas" style="pointer-events:none">
+          <span class="mp-mode-label">Vegas</span>
+        </div>
+        <div class="mp-mode-row" id="mpModeRowMatch" onclick="mpToggleMode('Match')">
+          <input type="checkbox" id="mpModeMatch" style="pointer-events:none">
+          <span class="mp-mode-label">比洞賽</span>
+        </div>
+        <div class="mp-mode-row" id="mpModeRowPar" onclick="mpToggleMode('Par')">
+          <input type="checkbox" id="mpModePar" style="pointer-events:none">
+          <span class="mp-mode-label">抓PAR</span>
+        </div>
+      </div>
+
+      <!-- 讓洞設定（所有人都可以填） -->
+      <div class="mp-card" id="mpHdcpCard" style="display:none">
+        <div class="mp-card-title"><span class="mp-section-num">3</span> 讓洞設定</div>
+        <div id="mpHdcpPairs"></div>
+      </div>
+
+      <!-- 玩家名字 -->
+      <div class="mp-card">
+        <div class="mp-card-title"><span class="mp-section-num">4</span> 玩家順序</div>
+        <div style="font-size:12px;color:var(--mp-gray);margin-bottom:10px">可調整上下順序</div>
+        <div id="mpPlayerOrder"></div>
+      </div>
+
+      <!-- 開始按鈕 -->
       <div class="mp-error" id="mpLobbyError"></div>
       <button class="mp-btn mp-btn-primary" id="mpStartBtn" onclick="mpStartGame()" style="display:none">開始計分 ▶</button>
-      <button class="mp-btn mp-btn-ghost" onclick="mpLeave()">離開球局</button>
+
+    </div>
+  </div>
+
+  <!-- ── 玩家綁定 ── -->
+  <div id="mp-screen-bind" style="display:none;padding:24px;max-width:480px;margin:0 auto;width:100%;box-sizing:border-box">
+    <div class="mp-card">
+      <div class="mp-card-title">👤 你是哪位球員？</div>
+      <div style="font-size:13px;color:var(--mp-gray);margin-bottom:14px">選擇你在這場比賽中的名字</div>
+      <div id="mpBindPlayerList"></div>
+      <div class="mp-divider"></div>
+      <button class="mp-btn mp-btn-ghost" onclick="mpBindSkip()">跳過（只幫忙記分）</button>
     </div>
   </div>
 
 </div>
-
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult, signInAnonymously, onAuthStateChanged, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
@@ -4869,22 +5039,48 @@ function mpEnterLobby(code) {
   mpShowScreen('lobby');
   document.getElementById('mpLobbyCode').textContent = code;
 
+  // 填充球場下拉選單
+  mpPopulateCourseSelect();
+
+  // 主持人才能編輯球場和模式
+  const hostOnly = ['mpLobbyCourse','mpLobbyStartHole','mpLobbyPointVal',
+    'mpLobbyMB','mpLobbyME4','mpLobbyME5','mpLobbyMHIO',
+    'mpModeRowVegas','mpModeRowMatch','mpModeRowPar'];
+  hostOnly.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.style.pointerEvents = mpIsHost ? '' : 'none';
+      el.style.opacity = mpIsHost ? '' : '0.6';
+    }
+  });
+
   if (mpGameListener) { off(ref(db, `games/${mpGameId}`)); mpGameListener = null; }
   mpGameListener = onValue(ref(db, `games/${code}`), snap => {
     if (!snap.exists()) { mpShowScreen('home'); return; }
     const game = snap.val();
     const players = Object.entries(game.players || {});
+
+    // 更新人數和列表
     document.getElementById('mpPlayerCount').textContent = players.length;
     document.getElementById('mpLobbyPlayerList').innerHTML = players.map(([uid, p]) => `
-      <div class="mp-player-item">
+      <div class="mp-player-row">
         <div class="mp-avatar">${p.photo ? `<img src="${p.photo}"/>` : (p.name||'?')[0]}</div>
-        <div style="flex:1;font-size:14px;font-weight:500">${p.name}</div>
+        <div style="flex:1;font-size:14px;font-weight:700;color:var(--mp-text)">${p.name}</div>
         ${p.isHost ? '<span class="mp-badge mp-badge-host">主持人</span>' : ''}
         ${uid === mpUser.uid ? '<span class="mp-badge mp-badge-you">我</span>' : ''}
-        ${uid === mpUser.uid ? `<button onclick="mpRename()" style="background:none;border:none;cursor:pointer;font-size:16px;padding:4px 6px;">✏️</button>` : ''}
+        ${uid === mpUser.uid ? `<button onclick="mpRename()" style="background:none;border:none;cursor:pointer;font-size:16px;padding:2px 6px;">✏️</button>` : ''}
       </div>
     `).join('');
 
+    // 套用 lobby settings
+    if (game.lobbySettings && !mpIsApplyingRemote) {
+      mpApplyLobbySettings(game.lobbySettings);
+    }
+
+    // 更新玩家順序
+    mpRenderPlayerOrder(players);
+
+    // 開始按鈕（只有主持人）
     const startBtn = document.getElementById('mpStartBtn');
     if (mpIsHost) {
       startBtn.style.display = 'flex';
@@ -4892,12 +5088,176 @@ function mpEnterLobby(code) {
     } else {
       startBtn.style.display = 'none';
     }
+
     if (game.status === 'playing') mpEnterGame(code, game.state);
   });
 }
 
+function mpPopulateCourseSelect() {
+  const sel = document.getElementById('mpLobbyCourse');
+  if (!sel) return;
+  const courses = JSON.parse(localStorage.getItem('golfSavedCoursesV21') || '{}');
+  const keys = Object.keys(courses);
+  sel.innerHTML = '<option value="">請選擇球場</option>' +
+    keys.map(k => `<option value="${k}">${courses[k].name || k}</option>`).join('');
+}
+
+function mpRenderPlayerOrder(players) {
+  const el = document.getElementById('mpPlayerOrder');
+  if (!el) return;
+  el.innerHTML = players.map(([uid, p], idx) => `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--mp-light)">
+      <div class="mp-avatar">${p.photo ? `<img src="${p.photo}"/>` : (p.name||'?')[0]}</div>
+      <div style="flex:1;font-size:14px;font-weight:700">${p.name}</div>
+      <div style="font-size:12px;color:var(--mp-gray);font-weight:700">玩家${idx+1}</div>
+    </div>
+  `).join('');
+}
+
+// 等待室設定變更 → 同步到 Firebase
+window.mpOnLobbyChange = () => {
+  if (!mpGameId || !mpIsHost || mpIsApplyingRemote) return;
+  clearTimeout(mpSyncTimer);
+  mpSyncTimer = setTimeout(async () => {
+    const settings = mpCollectLobbySettings();
+    await update(ref(db, `games/${mpGameId}`), { lobbySettings: settings });
+    mpRenderHdcpPairs(settings);
+  }, 300);
+};
+
+window.mpToggleMode = (mode) => {
+  if (!mpIsHost) return;
+  const cb = document.getElementById(`mpMode${mode}`);
+  const row = document.getElementById(`mpModeRow${mode}`);
+  if (!cb || !row) return;
+  cb.checked = !cb.checked;
+  row.classList.toggle('active', cb.checked);
+  mpOnLobbyChange();
+};
+
+function mpCollectLobbySettings() {
+  return {
+    course: document.getElementById('mpLobbyCourse')?.value || '',
+    startHole: document.getElementById('mpLobbyStartHole')?.value || '1',
+    pointVal: document.getElementById('mpLobbyPointVal')?.value || '100',
+    mB: document.getElementById('mpLobbyMB')?.value || '2',
+    mE4: document.getElementById('mpLobbyME4')?.value || '5',
+    mE5: document.getElementById('mpLobbyME5')?.value || '3',
+    mHIO: document.getElementById('mpLobbyMHIO')?.value || '10',
+    modeVegas: !!document.getElementById('mpModeVegas')?.checked,
+    modeMatch: !!document.getElementById('mpModeMatch')?.checked,
+    modePar: !!document.getElementById('mpModePar')?.checked,
+    pairs: mpCollectPairs()
+  };
+}
+
+function mpCollectPairs() {
+  const pairs = {};
+  ['0_1','0_2','0_3','1_2','1_3','2_3'].forEach(key => {
+    const [a,b] = key.split('_');
+    const val = document.getElementById(`mpPairStroke_${key}`)?.value || '';
+    if (val) pairs[key] = val;
+  });
+  return pairs;
+}
+
+function mpApplyLobbySettings(s) {
+  if (!s) return;
+  mpIsApplyingRemote = true;
+  const setV = (id, v) => { const el = document.getElementById(id); if (el) el.value = v ?? ''; };
+  setV('mpLobbyCourse', s.course);
+  setV('mpLobbyStartHole', s.startHole);
+  setV('mpLobbyPointVal', s.pointVal);
+  setV('mpLobbyMB', s.mB);
+  setV('mpLobbyME4', s.mE4);
+  setV('mpLobbyME5', s.mE5);
+  setV('mpLobbyMHIO', s.mHIO);
+  const setMode = (id, rowId, val) => {
+    const cb = document.getElementById(id); if (cb) cb.checked = !!val;
+    const row = document.getElementById(rowId); if (row) row.classList.toggle('active', !!val);
+  };
+  setMode('mpModeVegas','mpModeRowVegas', s.modeVegas);
+  setMode('mpModeMatch','mpModeRowMatch', s.modeMatch);
+  setMode('mpModePar','mpModeRowPar', s.modePar);
+  // 更新讓洞面板
+  mpRenderHdcpPairs(s);
+  setTimeout(() => { mpIsApplyingRemote = false; }, 100);
+}
+
+function mpRenderHdcpPairs(settings) {
+  // 只有選了模式才顯示讓洞
+  const showHdcp = settings?.modeMatch || settings?.modePar || settings?.modeVegas;
+  const card = document.getElementById('mpHdcpCard');
+  if (card) card.style.display = showHdcp ? 'block' : 'none';
+  if (!showHdcp) return;
+
+  const el = document.getElementById('mpHdcpPairs');
+  if (!el) return;
+  // 取得玩家名字（從等待室玩家列表）
+  const snap = document.getElementById('mpLobbyPlayerList');
+  const nameEls = snap ? snap.querySelectorAll('[data-player-name]') : [];
+  // 簡單版：顯示所有配對
+  const pairs = ['0_1','0_2','0_3','1_2','1_3','2_3'];
+  el.innerHTML = pairs.map(key => {
+    const [a,b] = key.split('_');
+    const val = settings?.pairs?.[key] || '';
+    return `
+      <div class="mp-pair-block">
+        <div class="mp-pair-title">玩家${Number(a)+1} vs 玩家${Number(b)+1}</div>
+        <div class="mp-pair-input-row">
+          <span style="font-size:13px;color:var(--mp-gray);flex:1">讓洞數</span>
+          <input class="mp-pair-input" style="width:80px" type="number"
+            id="mpPairStroke_${key}" value="${val}" placeholder="0"
+            oninput="mpOnLobbyChange()" />
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
 window.mpStartGame = async () => {
-  await update(ref(db, `games/${mpGameId}`), { status: 'playing', state: null });
+  // 收集等待室設定，套用到 1.74 DOM，再寫入 Firebase
+  const settings = mpCollectLobbySettings();
+
+  // 清空舊資料
+  localStorage.removeItem('golfAutoSaveBeta15');
+  if (typeof clearCurrentRoundData === 'function') clearCurrentRoundData(false);
+
+  // 套用球場到 1.74
+  if (settings.course) {
+    const sel = document.getElementById('savedCourseSelect');
+    if (sel) {
+      sel.value = settings.course;
+      if (typeof handleSavedCourseSelect === 'function') handleSavedCourseSelect();
+    }
+  }
+
+  // 套用倍率
+  const setV = (id, v) => { const el = document.getElementById(id); if (el) el.value = v ?? ''; };
+  setV('startHole', settings.startHole);
+  setV('pointVal', settings.pointVal);
+  setV('mB', settings.mB);
+  setV('mE4', settings.mE4);
+  setV('mE5', settings.mE5);
+  setV('mHIO', settings.mHIO);
+
+  // 套用比賽模式
+  const modeVegas = document.getElementById('modeVegas');
+  const modeMatch = document.getElementById('modeMatch');
+  const modePar = document.getElementById('modePar');
+  if (modeVegas) modeVegas.checked = !!settings.modeVegas;
+  if (modeMatch) modeMatch.checked = !!settings.modeMatch;
+  if (modePar) modePar.checked = !!settings.modePar;
+  if (typeof applyModeStates === 'function') applyModeStates();
+
+  // 套用讓洞（之後再實作）
+
+  // 等 DOM 穩定後收集 state
+  await new Promise(r => setTimeout(r, 300));
+  let state = null;
+  try { if (typeof collectAppState === 'function') state = collectAppState(); } catch(e) {}
+
+  await update(ref(db, `games/${mpGameId}`), { status: 'playing', state, lobbySettings: settings });
 };
 
 window.mpRename = async () => {
@@ -4939,12 +5299,18 @@ function mpEnterGame(code, state) {
     // 掛載同步
     mpHookHostSync();
   } else {
-    // 球友：只顯示計分和結算
-    document.body.classList.add('guest-mode');
-    // 套用主持人的 state
+    // 球友：套用 state 後顯示玩家綁定畫面
     if (state) mpApplyState(state);
-    // 允許球友填成績
     mpHookGuestScoreSync();
+    // 顯示玩家綁定畫面（overlay 維持顯示，但換成綁定畫面）
+    if (state) {
+      mpShowBindScreen(state);
+    } else {
+      // 沒有 state（主持人還沒開始設定），直接進去
+      document.body.classList.add('guest-mode');
+      document.getElementById('mp-overlay').classList.add('hide');
+      document.getElementById('mp-bar').classList.add('show');
+    }
   }
 
   // 監聽 Firebase 更新
@@ -5014,17 +5380,102 @@ function mpGuestOnScoreChange(e) {
 }
 
 // ── APPLY STATE（球友套用主持人 state）───────────────────
+function mpSetVal(id, val) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (el.type === 'checkbox') { el.checked = !!val; }
+  else { el.value = val ?? ''; }
+}
+
 function mpApplyState(state) {
   if (!state || typeof state !== 'object') return;
   mpIsApplyingRemote = true;
   try {
-    localStorage.setItem('golfAutoSaveBeta15', JSON.stringify(state));
-    if (typeof restoreAutoSave === 'function') restoreAutoSave();
+    // 球場
+    const sel = document.getElementById('savedCourseSelect');
+    if (sel && state.savedCourse !== undefined) {
+      sel.value = state.savedCourse;
+      if (typeof handleSavedCourseSelect === 'function') handleSavedCourseSelect();
+    }
+    mpSetVal('startHole', state.startHole);
+    mpSetVal('pointVal', state.pointVal);
+    mpSetVal('mB', state.mB);
+    mpSetVal('mE4', state.mE4);
+    mpSetVal('mE5', state.mE5);
+    mpSetVal('mHIO', state.mHIO);
+
+    // 比賽模式（直接設 checkbox + 更新 UI）
+    const modeVegas = document.getElementById('modeVegas');
+    const extMode = document.getElementById('extMode');
+    const modeMatch = document.getElementById('modeMatch');
+    const modePar = document.getElementById('modePar');
+    if (state.modes) {
+      if (modeVegas) modeVegas.checked = !!state.modes.vegas;
+      if (extMode) extMode.checked = !!state.modes.ext;
+      if (modeMatch) modeMatch.checked = !!state.modes.match;
+      if (modePar) modePar.checked = !!state.modes.par;
+      if (typeof applyModeStates === 'function') applyModeStates();
+    }
+
+    // 玩家名字
+    (state.players || []).forEach((p, i) => { mpSetVal(`name${i}`, p.name); });
+    if (typeof updateNames === 'function') updateNames(true);
+
+    // 玩家參賽
+    (state.players || []).forEach((p, i) => {
+      mpSetVal(`p${i}_m`, p.match);
+      mpSetVal(`p${i}_p`, p.par);
+    });
+
+    // 讓洞配對
+    if (state.pairs && typeof pairKeys !== 'undefined') {
+      pairKeys.forEach(key => {
+        const [a,b] = key.split('_');
+        const pair = state.pairs[key];
+        if (!pair) return;
+        if (typeof setPairState === 'function') setPairState(Number(a), Number(b), !!pair.checked, String(pair.value||'0'), true);
+        mpSetVal(`pair-strokes-${a}-${b}`, pair.value);
+        if (typeof setPairHandicapMode === 'function') setPairHandicapMode(Number(a), Number(b), pair.mode||'general', true);
+        mpSetVal(`pair-offset-${a}-${b}`, pair.offset);
+        const box = document.getElementById(`pair-offset-box-${a}-${b}`);
+        if (box) box.classList.toggle('active', !!pair.offset);
+        ['p3','p4','p5'].forEach(k => mpSetVal(`pair-special-${k}-${a}-${b}`, pair.special?.[k]||''));
+      });
+    }
+
+    // 渲染計分表
+    if (typeof renderScoreboard === 'function') renderScoreboard();
+    if (typeof renderVegasRankInputs === 'function') renderVegasRankInputs();
+
+    // 成績
+    const focusedId = document.activeElement?.id;
+    if (state.scores && typeof playerIDs !== 'undefined') {
+      playerIDs.forEach(i => {
+        for (let h=1; h<=18; h++) {
+          const cid = `cell_${i}_${h}`;
+          if (cid === focusedId) continue;
+          const v = state.scores[`${i}_${h}`] || '';
+          const el = document.getElementById(cid);
+          if (el && el.value !== v) {
+            el.value = v;
+            if (typeof drawMark === 'function') drawMark(i, h, false);
+          }
+        }
+      });
+      if (typeof updateParTotals === 'function') updateParTotals();
+      if (typeof getActivePlayers === 'function') {
+        getActivePlayers().forEach(p => { if (typeof updatePlayerTotals === 'function') updatePlayerTotals(p); });
+      }
+      if (typeof updateVegasPreview === 'function') updateVegasPreview();
+    }
+
+    // 讓洞記憶
     setTimeout(() => {
       if (typeof applyHdcpMemoryAndNotify === 'function') applyHdcpMemoryAndNotify();
-    }, 500);
+    }, 200);
+
   } catch(e) { console.error('mpApplyState', e); }
-  finally { setTimeout(() => { mpIsApplyingRemote = false; }, 600); }
+  finally { setTimeout(() => { mpIsApplyingRemote = false; }, 200); }
 }
 
 // ── APPLY GUEST SCORES（主持人套用球友成績）─────────────
@@ -5053,6 +5504,49 @@ function mpApplyGuestScores(scores) {
   } catch(e) { console.error('mpApplyGuestScores', e); }
   finally { setTimeout(() => { mpIsApplyingRemote = false; }, 200); }
 }
+
+// ── PLAYER BINDING ──────────────────────────────────────
+let mpBoundPlayerIdx = null; // 球友綁定的玩家 index（0-3）
+
+function mpShowBindScreen(state) {
+  // 從 state 取得玩家名字清單
+  const names = (state?.players || []).map(p => p.name).filter(n => n && n.trim());
+  if (names.length === 0) { mpBindSkip(); return; }
+
+  document.getElementById('mpBindPlayerList').innerHTML = names.map((name, idx) => `
+    <button onclick="mpBindPlayer(${idx})" style="
+      display:flex; align-items:center; gap:12px;
+      width:100%; padding:12px 14px; margin-bottom:8px;
+      background:white; border:2px solid #d6e2d3; border-radius:12px;
+      font-size:15px; font-weight:600; cursor:pointer; font-family:inherit;
+      transition: all 0.15s;
+    " onmouseover="this.style.borderColor='#2f6b3f'" onmouseout="this.style.borderColor='#d6e2d3'">
+      <div style="width:36px;height:36px;border-radius:50%;background:#2f6b3f;color:white;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;flex-shrink:0">${name[0]}</div>
+      ${name}
+    </button>
+  `).join('');
+
+  mpShowScreen('bind');
+}
+
+window.mpBindPlayer = (idx) => {
+  mpBoundPlayerIdx = idx;
+  document.getElementById('mp-overlay').classList.add('hide');
+  document.body.classList.add('guest-mode');
+  document.getElementById('mp-bar').classList.add('show');
+  // 自動切換到計分頁
+  if (typeof openTab === 'function') openTab('scoring');
+  mpToast(`✅ 已綁定為玩家${idx+1}`);
+};
+
+window.mpBindSkip = () => {
+  mpBoundPlayerIdx = null;
+  document.getElementById('mp-overlay').classList.add('hide');
+  document.body.classList.add('guest-mode');
+  document.getElementById('mp-bar').classList.add('show');
+  // 自動切換到計分頁
+  if (typeof openTab === 'function') openTab('scoring');
+};
 
 // ── LEAVE ────────────────────────────────────────────────
 window.mpLeave = async () => {
@@ -5095,7 +5589,7 @@ function mpForceLeave() {
 
 // ── HELPERS ──────────────────────────────────────────────
 window.mpShowScreen = (name) => {
-  ['login','home','join','lobby'].forEach(s => {
+  ['login','home','join','lobby','bind'].forEach(s => {
     const el = document.getElementById(`mp-screen-${s}`);
     if (el) el.style.display = s === name ? 'block' : 'none';
   });
