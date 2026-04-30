@@ -5102,17 +5102,64 @@ function mpPopulateCourseSelect() {
     keys.map(k => `<option value="${k}">${courses[k].name || k}</option>`).join('');
 }
 
+// 玩家順序資料（含手動填入）
+let mpPlayerSlots = [{name:'',uid:''},{name:'',uid:''},{name:'',uid:''},{name:'',uid:''}];
+
 function mpRenderPlayerOrder(players) {
   const el = document.getElementById('mpPlayerOrder');
   if (!el) return;
-  el.innerHTML = players.map(([uid, p], idx) => `
-    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--mp-light)">
-      <div class="mp-avatar">${p.photo ? `<img src="${p.photo}"/>` : (p.name||'?')[0]}</div>
-      <div style="flex:1;font-size:14px;font-weight:700">${p.name}</div>
-      <div style="font-size:12px;color:var(--mp-gray);font-weight:700">玩家${idx+1}</div>
+
+  // 把加入的玩家填入 slots（保留原有位置）
+  players.forEach(([uid, p]) => {
+    const existing = mpPlayerSlots.findIndex(s => s.uid === uid);
+    if (existing >= 0) {
+      mpPlayerSlots[existing].name = p.name;
+    } else {
+      // 找第一個空的 slot
+      const empty = mpPlayerSlots.findIndex(s => !s.uid);
+      if (empty >= 0) {
+        mpPlayerSlots[empty] = { name: p.name, uid, photo: p.photo || '' };
+      }
+    }
+  });
+
+  el.innerHTML = mpPlayerSlots.map((slot, idx) => `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--mp-light)" id="mpSlot_${idx}">
+      <div style="display:flex;flex-direction:column;gap:2px;cursor:grab;color:var(--mp-gray);font-size:18px;padding:0 4px">⋮⋮</div>
+      <div style="font-size:12px;color:var(--mp-gray);font-weight:900;width:36px;text-align:center;flex-shrink:0">玩家${idx+1}</div>
+      ${slot.uid ? `
+        <div class="mp-avatar">${slot.photo ? `<img src="${slot.photo}"/>` : (slot.name||'?')[0]}</div>
+        <div style="flex:1;font-size:14px;font-weight:700;color:var(--mp-text)">${slot.name}</div>
+        ${mpIsHost ? `<button onclick="mpClearSlot(${idx})" style="background:none;border:none;color:var(--mp-gray);cursor:pointer;font-size:16px;padding:4px">✕</button>` : ''}
+      ` : `
+        <input id="mpPlayerName_${idx}" class="mp-input" style="margin:0;flex:1"
+          placeholder="輸入球友名字" value="${slot.name}"
+          oninput="mpOnPlayerNameChange(${idx}, this.value)"
+          ${!mpIsHost ? 'readonly' : ''} />
+      `}
     </div>
   `).join('');
+
+  // 更新讓洞面板名字
+  const settings = mpCollectLobbySettings();
+  mpRenderHdcpPairs(settings);
 }
+
+window.mpOnPlayerNameChange = (idx, val) => {
+  mpPlayerSlots[idx].name = val;
+  // 同步到 Firebase lobbySettings
+  mpOnLobbyChange();
+  // 更新讓洞面板
+  const settings = mpCollectLobbySettings();
+  mpRenderHdcpPairs(settings);
+};
+
+window.mpClearSlot = (idx) => {
+  mpPlayerSlots[idx] = { name: '', uid: '' };
+  const settings = mpCollectLobbySettings();
+  update(ref(db, `games/${mpGameId}`), { lobbySettings: settings }).catch(()=>{});
+  mpRenderPlayerOrder([]);
+};
 
 // 等待室設定變更 → 同步到 Firebase
 window.mpOnLobbyChange = () => {
@@ -5147,14 +5194,14 @@ function mpCollectLobbySettings() {
     modeVegas: !!document.getElementById('mpModeVegas')?.checked,
     modeMatch: !!document.getElementById('mpModeMatch')?.checked,
     modePar: !!document.getElementById('mpModePar')?.checked,
-    pairs: mpCollectPairs()
+    pairs: mpCollectPairs(),
+    players: mpPlayerSlots.map(s => ({ name: s.name, uid: s.uid || '' }))
   };
 }
 
 function mpCollectPairs() {
   const pairs = {};
   ['0_1','0_2','0_3','1_2','1_3','2_3'].forEach(key => {
-    const [a,b] = key.split('_');
     const val = document.getElementById(`mpPairStroke_${key}`)?.value || '';
     if (val) pairs[key] = val;
   });
@@ -5184,8 +5231,18 @@ function mpApplyLobbySettings(s) {
   setTimeout(() => { mpIsApplyingRemote = false; }, 100);
 }
 
+// 取得等待室目前的玩家名字（含手動填入的）
+function mpGetLobbyPlayerNames() {
+  const names = [];
+  for (let i = 0; i < 4; i++) {
+    const el = document.getElementById(`mpPlayerName_${i}`);
+    if (el && el.value.trim()) names.push(el.value.trim());
+    else names.push(`玩家${i+1}`);
+  }
+  return names;
+}
+
 function mpRenderHdcpPairs(settings) {
-  // 只有選了模式才顯示讓洞
   const showHdcp = settings?.modeMatch || settings?.modePar || settings?.modeVegas;
   const card = document.getElementById('mpHdcpCard');
   if (card) card.style.display = showHdcp ? 'block' : 'none';
@@ -5193,19 +5250,30 @@ function mpRenderHdcpPairs(settings) {
 
   const el = document.getElementById('mpHdcpPairs');
   if (!el) return;
-  // 取得玩家名字（從等待室玩家列表）
-  const snap = document.getElementById('mpLobbyPlayerList');
-  const nameEls = snap ? snap.querySelectorAll('[data-player-name]') : [];
-  // 簡單版：顯示所有配對
-  const pairs = ['0_1','0_2','0_3','1_2','1_3','2_3'];
+
+  const names = mpGetLobbyPlayerNames();
+  const activePairs = [];
+  // 只顯示有名字（不是預設值）的玩家配對
+  for (let a = 0; a < names.length; a++) {
+    for (let b = a+1; b < names.length; b++) {
+      if (names[a] !== `玩家${a+1}` || names[b] !== `玩家${b+1}`) {
+        activePairs.push(`${a}_${b}`);
+      }
+    }
+  }
+  // 如果沒有名字就顯示全部
+  const pairs = activePairs.length > 0 ? activePairs : ['0_1','0_2','0_3','1_2','1_3','2_3'];
+
   el.innerHTML = pairs.map(key => {
     const [a,b] = key.split('_');
+    const nameA = names[Number(a)];
+    const nameB = names[Number(b)];
     const val = settings?.pairs?.[key] || '';
     return `
       <div class="mp-pair-block">
-        <div class="mp-pair-title">玩家${Number(a)+1} vs 玩家${Number(b)+1}</div>
+        <div class="mp-pair-title">${nameA} <span style="color:var(--mp-gray)">vs</span> ${nameB}</div>
         <div class="mp-pair-input-row">
-          <span style="font-size:13px;color:var(--mp-gray);flex:1">讓洞數</span>
+          <span style="font-size:12px;color:var(--mp-gray);flex:1">${nameA} 讓 ${nameB}</span>
           <input class="mp-pair-input" style="width:80px" type="number"
             id="mpPairStroke_${key}" value="${val}" placeholder="0"
             oninput="mpOnLobbyChange()" />
@@ -5241,6 +5309,13 @@ window.mpStartGame = async () => {
   setV('mE5', settings.mE5);
   setV('mHIO', settings.mHIO);
 
+  // 套用玩家名字
+  (settings.players || []).forEach((p, i) => {
+    const el = document.getElementById(`name${i}`);
+    if (el && p.name) { el.value = p.name; el.dispatchEvent(new Event('input', {bubbles:true})); }
+  });
+  if (typeof updateNames === 'function') updateNames(true);
+
   // 套用比賽模式
   const modeVegas = document.getElementById('modeVegas');
   const modeMatch = document.getElementById('modeMatch');
@@ -5250,7 +5325,16 @@ window.mpStartGame = async () => {
   if (modePar) modePar.checked = !!settings.modePar;
   if (typeof applyModeStates === 'function') applyModeStates();
 
-  // 套用讓洞（之後再實作）
+  // 套用讓洞（一般讓法）
+  if (settings.pairs) {
+    Object.entries(settings.pairs).forEach(([key, val]) => {
+      const [a,b] = key.split('_');
+      // 啟用配對
+      if (typeof setPairState === 'function') setPairState(Number(a), Number(b), true, String(val), true);
+      const strokeEl = document.getElementById(`pair-strokes-${a}-${b}`);
+      if (strokeEl) strokeEl.value = val;
+    });
+  }
 
   // 等 DOM 穩定後收集 state
   await new Promise(r => setTimeout(r, 300));
