@@ -4992,46 +4992,150 @@ function mpEnterGame(code, game) {
 }
 
 // ── APPLY REMOTE STATE ───────────────────────────────────
+function mpSetVal(id, val) {
+  const el = document.getElementById(id);
+  if (!el) return false;
+  if (el.type === 'checkbox') {
+    if (el.checked !== !!val) { el.checked = !!val; return true; }
+  } else {
+    if (el.value !== String(val ?? '')) { el.value = val ?? ''; return true; }
+  }
+  return false;
+}
+
 function mpApplyRemoteState(state) {
+  if (!state || typeof state !== 'object') return;
   mpIsApplyingRemote = true;
   try {
-    localStorage.setItem('golfAutoSaveBeta15', JSON.stringify(state));
-    if (typeof restoreAutoSave === 'function') restoreAutoSave();
-    // restoreAutoSave 完成後（isRestoringAutoSave 已歸零）呼叫讓洞帶入
+    let needRenderScoreboard = false;
+    let needRenderMode = false;
+
+    // 1. 球場下拉選單
+    if (state.savedCourse !== undefined) {
+      if (mpSetVal('savedCourseSelect', state.savedCourse)) {
+        if (typeof handleSavedCourseSelect === 'function') handleSavedCourseSelect();
+        needRenderScoreboard = true;
+      }
+    }
+
+    // 2. 起始洞
+    if (mpSetVal('startHole', state.startHole)) needRenderScoreboard = true;
+
+    // 3. 點數倍率
+    mpSetVal('pointVal', state.pointVal);
+    mpSetVal('mB', state.mB);
+    mpSetVal('mE4', state.mE4);
+    mpSetVal('mE5', state.mE5);
+    mpSetVal('mHIO', state.mHIO);
+
+    // 4. 比賽模式
+    if (mpSetVal('modeVegas', state.modeVegas)) needRenderMode = true;
+    if (mpSetVal('extMode', state.extMode)) needRenderMode = true;
+    if (mpSetVal('modeMatch', state.modeMatch)) needRenderMode = true;
+    if (mpSetVal('modePar', state.modePar)) needRenderMode = true;
+    if (needRenderMode && typeof applyModeStates === 'function') applyModeStates();
+
+    // 5. 玩家名字
+    let nameChanged = false;
+    for (let i = 0; i < 4; i++) {
+      const p = state[`name${i}`] ?? '';
+      if (mpSetVal(`name${i}`, p)) nameChanged = true;
+    }
+    if (nameChanged && typeof updateNames === 'function') updateNames(true);
+
+    // 6. 玩家參賽設定
+    for (let i = 0; i < 4; i++) {
+      mpSetVal(`p${i}_m`, state[`p${i}_m`]);
+      mpSetVal(`p${i}_p`, state[`p${i}_p`]);
+      const vr = document.getElementById(`vegasRank${i}`);
+      if (vr && state[`vegasRank${i}`] !== undefined) vr.value = state[`vegasRank${i}`] || '';
+    }
+
+    // 7. 讓洞配對設定
+    ['0_1','0_2','0_3','1_2','1_3','2_3'].forEach(key => {
+      const [a,b] = key.split('_');
+      const checked = state[`pair_checked_${key}`];
+      const val = state[`pair_val_${key}`];
+      const mode = state[`pair_mode_${key}`];
+      const offset = state[`pair_offset_${key}`];
+      if (checked !== undefined && typeof setPairState === 'function') {
+        setPairState(Number(a), Number(b), !!checked, String(val||'0'), true);
+      }
+      if (val !== undefined) mpSetVal(`pair-strokes-${a}-${b}`, val);
+      if (mode !== undefined && typeof setPairHandicapMode === 'function') {
+        setPairHandicapMode(Number(a), Number(b), mode || 'general', true);
+      }
+      if (offset !== undefined) {
+        mpSetVal(`pair-offset-${a}-${b}`, offset);
+        const offsetBox = document.getElementById(`pair-offset-box-${a}-${b}`);
+        if (offsetBox) offsetBox.classList.toggle('active', !!offset);
+      }
+      ['p3','p4','p5'].forEach(kind => {
+        const v = state[`pair_${kind}_${key}`];
+        if (v !== undefined) mpSetVal(`pair-special-${kind}-${a}-${b}`, v);
+      });
+    });
+
+    // 8. 渲染計分表
+    if (needRenderScoreboard && typeof renderScoreboard === 'function') renderScoreboard();
+
+    // 9. 成績（跳過正在輸入的格子）
+    const focusedId = document.activeElement?.id;
+    for (let i = 0; i < 4; i++) {
+      for (let h = 1; h <= 18; h++) {
+        const cellId = `cell_${i}_${h}`;
+        if (cellId === focusedId) continue;
+        const v = state[`score_${i}_${h}`];
+        if (mpSetVal(cellId, v !== undefined ? v : '')) {
+          if (typeof drawMark === 'function') drawMark(i, h, false);
+        }
+      }
+    }
+    if (typeof updateParTotals === 'function') updateParTotals();
+    if (typeof getActivePlayers === 'function') {
+      getActivePlayers().forEach(p => {
+        if (typeof updatePlayerTotals === 'function') updatePlayerTotals(p);
+      });
+    }
+    if (typeof updateVegasPreview === 'function') updateVegasPreview();
+
+    // 10. 讓洞記憶帶入
     setTimeout(() => {
       if (typeof applyHdcpMemoryAndNotify === 'function') applyHdcpMemoryAndNotify();
-    }, 800);
+    }, 200);
+
   } catch(e) {
     console.error('mpApplyRemoteState error', e);
   } finally {
-    setTimeout(() => { mpIsApplyingRemote = false; }, 500);
+    setTimeout(() => { mpIsApplyingRemote = false; }, 150);
   }
 }
 
 // ── UPDATE BAR PLAYERS ───────────────────────────────────
 function mpUpdateBarPlayers(game) {
-  // 優先讀 state 裡的玩家順序（name1~name4）
   let names = [];
   const state = game.state;
   if (state) {
     try {
       const parsed = typeof state === 'string' ? JSON.parse(state) : state;
-      // 從 state 裡找 name1~name4
-      for (let i = 1; i <= 4; i++) {
-        const n = parsed[`name${i}`] || parsed?.inputs?.[`name${i}`];
+      // 從 state 裡找 name0~name3（新格式）
+      for (let i = 0; i <= 3; i++) {
+        const n = parsed[`name${i}`];
         if (n && n.trim()) names.push(n.trim());
       }
     } catch(e) {}
   }
-  // 如果 state 沒有名字，退回用 players 物件
+  // 如果 state 沒有名字，退回用目前 DOM 的名字
+  if (names.length === 0) {
+    for (let i = 0; i <= 3; i++) {
+      const el = document.getElementById(`name${i}`);
+      if (el && el.value.trim()) names.push(el.value.trim());
+    }
+  }
+  // 再退回用 players 物件（等待室名字）
   if (names.length === 0) {
     const players = Object.values(game.players || {});
     names = players.map(p => p.name.split(' ')[0]);
-  }
-  // 自己排第一
-  const myName = mpUser.displayName?.split(' ')[0];
-  if (myName && names.includes(myName)) {
-    names = [myName, ...names.filter(n => n !== myName)];
   }
   document.getElementById('mpBarPlayers').textContent = names.join('、');
 }
