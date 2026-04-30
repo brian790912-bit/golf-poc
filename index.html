@@ -1101,9 +1101,16 @@
       <button id="favoriteBtn" onclick="handleFavoriteToggle()" style="font-size:1.4rem; background:none; border:none; cursor:pointer; padding:4px 8px;" title="加入最愛">☆</button>
       <span id="favoriteLabel" style="font-size:.9rem; color:#7c8879;">我的最愛</span>
     </div>
-    <div style="display:grid; grid-template-columns:1fr; gap:8px;">
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
       <button type="button" class="new-game-btn" onclick="showNewCourseDialog('')" style="background:linear-gradient(180deg,#2f6b3f,#1e4d2b);">新增球場</button>
+      <button type="button" class="new-game-btn" onclick="startNewGame()" style="background:linear-gradient(180deg,#2f6b3f,#1e4d2b);">開新球局</button>
     </div>
+    <div class="small-note" style="margin-top:2px;">球場資料需手動新增，之後可直接從下拉選單選取</div>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+      <button type="button" class="new-game-btn" onclick="triggerImportCoursesJson()" style="background:linear-gradient(180deg,#607d8b,#546e7a);">匯入球場資料</button>
+      <button type="button" class="new-game-btn" onclick="exportCoursesJson()" style="background:linear-gradient(180deg,#607d8b,#546e7a);">匯出球場資料</button>
+    </div>
+    <div class="small-note" style="margin-top:-4px; margin-bottom:4px;">每次新增球場後請立即匯出備份，系統更新可能導致資料遺失</div>
     </div>
   </div>
   <input type="file" id="importCoursesFile" accept="application/json,.json" style="display:none" onchange="importCoursesJson(event)">
@@ -2529,15 +2536,12 @@
 
 
     function getSavedCourses(){
-      // 先回傳 localStorage 快取，背景從 Firebase 同步
       try { return JSON.parse(localStorage.getItem('golfSavedCoursesV21') || '{}'); }
       catch(e){ return {}; }
     }
 
     function setSavedCourses(data){
-      // 同時存 localStorage（即時）和 Firebase（共用）
       localStorage.setItem('golfSavedCoursesV21', JSON.stringify(data));
-      mpSyncCoursesToFirebase(data);
     }
 
     function buildCoursesBackupPayload(){
@@ -3110,7 +3114,6 @@
     }
     function setHdcpMemory(data){
       localStorage.setItem(HDCP_MEMORY_KEY, JSON.stringify(data));
-      if (typeof mpSyncHdcpToFirebase === "function") mpSyncHdcpToFirebase(data);
     }
     function hdcpMemoryKey(nameA, nameB){
       // 用名字排序確保 A vs B 和 B vs A 是同一筆記錄
@@ -4343,38 +4346,6 @@
           }
         };
       });
-
-      // ── 扁平欄位（供 mpApplyRemoteState 直接比對）──
-      state.savedCourse = document.getElementById('savedCourseSelect')?.value || '';
-      state.mB = state.multipliers.mB;
-      state.mE4 = state.multipliers.mE4;
-      state.mE5 = state.multipliers.mE5;
-      state.mHIO = state.multipliers.mHIO;
-      state.modeVegas = state.modes.vegas;
-      state.extMode = state.modes.ext;
-      state.modeMatch = state.modes.match;
-      state.modePar = state.modes.par;
-      playerIDs.forEach(i => {
-        state[`name${i}`] = state.players[i].name;
-        state[`p${i}_m`] = state.players[i].match;
-        state[`p${i}_p`] = state.players[i].par;
-        state[`vegasRank${i}`] = state.players[i].vegasRank;
-      });
-      pairKeys.forEach(key => {
-        const [a,b] = key.split('_');
-        const pair = state.pairs[key];
-        state[`pair_checked_${key}`] = pair.checked;
-        state[`pair_val_${key}`] = pair.value;
-        state[`pair_mode_${key}`] = pair.mode;
-        state[`pair_offset_${key}`] = pair.offset;
-        state[`pair_p3_${key}`] = pair.special.p3;
-        state[`pair_p4_${key}`] = pair.special.p4;
-        state[`pair_p5_${key}`] = pair.special.p5;
-      });
-      playerIDs.forEach(i => {
-        for (let h=1; h<=18; h++) state[`score_${i}_${h}`] = state.scores[`${i}_${h}`];
-      });
-
       return state;
     }
 
@@ -4513,154 +4484,168 @@
   </script>
 
 <!-- ════════════════════════════════════════════════════════
-     MULTI-PLAYER FIREBASE LAYER
-     策略：用 collectAppState() / restoreAutoSave() 橋接 Firebase
-     不修改任何原有邏輯，只在外層加多人同步
+     GOLF SCORE MULTI-PLAYER v2
+     架構：主持人完整設定，球友只看計分/結算
 ════════════════════════════════════════════════════════ -->
 <style>
-  /* ── 多人面板 overlay ── */
-  #mp-bar {
-    position: fixed; bottom: 0; left: 0; right: 0;
-    background: #1e4d2b; color: #fff;
-    padding: 10px 16px;
-    display: flex; align-items: center; gap: 10px;
-    z-index: 9000;
-    box-shadow: 0 -2px 12px rgba(0,0,0,0.25);
-    font-size: 13px;
-    transform: translateY(100%);
-    transition: transform 0.3s ease;
-  }
-  #mp-bar.show { transform: translateY(0); }
-  #mp-bar .mp-dot {
-    width: 8px; height: 8px; border-radius: 50%;
-    background: #4ade80; flex-shrink: 0;
-    animation: mppulse 2s infinite;
-  }
-  @keyframes mppulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
-  #mp-bar .mp-room { font-family: monospace; font-size: 16px; font-weight: 700; color: #c9a84c; letter-spacing: 3px; }
-  #mp-bar .mp-players { flex: 1; font-size: 12px; color: #a7c4ae; }
-  #mp-bar .mp-leave {
-    background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3);
-    color: #fff; border-radius: 8px; padding: 5px 12px;
-    font-size: 12px; cursor: pointer; flex-shrink: 0;
-  }
+/* ── 多人 overlay ── */
+#mp-overlay {
+  position: fixed; inset: 0;
+  background: #0f4524;
+  display: flex; align-items: center; justify-content: center;
+  z-index: 9999; padding: 20px;
+}
+#mp-overlay.hide { display: none; }
 
-  /* ── 登入 / 大廳 overlay ── */
-  #mp-overlay {
-    position: fixed; inset: 0;
-    background: #0f4524;
-    display: flex; align-items: center; justify-content: center;
-    z-index: 9999;
-    padding: 20px;
-  }
-  #mp-overlay.hide { display: none; }
-  .mp-sheet {
-    background: #fff; border-radius: 20px;
-    width: min(440px, 100%);
-    box-shadow: 0 24px 48px rgba(0,0,0,0.35);
-    overflow: hidden;
-  }
-  .mp-sheet-head {
-    background: linear-gradient(180deg, #2f6b3f, #1e4d2b);
-    color: #fff; padding: 20px;
-    text-align: center;
-  }
-  .mp-sheet-head .mp-logo { font-size: 40px; margin-bottom: 6px; }
-  .mp-sheet-head h2 { font-size: 20px; margin: 0 0 4px; }
-  .mp-sheet-head p { font-size: 13px; opacity: 0.8; margin: 0; }
-  .mp-sheet-body { padding: 20px; }
-  .mp-btn {
-    display: flex; align-items: center; justify-content: center; gap: 8px;
-    width: 100%; padding: 13px; border-radius: 12px;
-    font-size: 15px; font-weight: 700; cursor: pointer;
-    border: none; transition: all 0.15s;
-  }
-  .mp-btn:active { transform: scale(0.97); }
-  .mp-btn-google { background: #fff; color: #333; border: 2px solid #ddd; }
-  .mp-btn-google:hover { border-color: #999; }
-  .mp-btn-primary { background: #2f6b3f; color: #fff; }
-  .mp-btn-primary:hover { background: #1e4d2b; }
-  .mp-btn-outline { background: transparent; color: #2f6b3f; border: 2px solid #2f6b3f; }
-  .mp-btn-outline:hover { background: #2f6b3f; color: #fff; }
-  .mp-divider { display:flex; align-items:center; gap:10px; color:#999; font-size:12px; margin: 14px 0; }
-  .mp-divider::before,.mp-divider::after { content:''; flex:1; height:1px; background:#eee; }
-  .mp-input {
-    width: 100%; padding: 12px 14px;
-    border: 2px solid #d6e2d3; border-radius: 10px;
-    font-size: 15px; font-family: inherit; outline: none;
-    margin-bottom: 10px; transition: border-color 0.15s;
-  }
-  .mp-input:focus { border-color: #2f6b3f; }
-  .mp-input.code { font-family: monospace; font-size: 24px; text-align: center; letter-spacing: 6px; text-transform: uppercase; }
-  .mp-label { font-size: 12px; font-weight: 700; color: #7c8879; margin-bottom: 5px; display: block; text-transform: uppercase; letter-spacing: 0.5px; }
-  .mp-error { background: #fee2e2; color: #b91c1c; border-radius: 8px; padding: 10px 14px; font-size: 13px; margin-bottom: 10px; display: none; }
-  .mp-loading { text-align: center; padding: 20px; color: #7c8879; display: none; }
+.mp-sheet {
+  background: #fff; border-radius: 20px;
+  width: min(440px, 100%);
+  box-shadow: 0 24px 48px rgba(0,0,0,0.35);
+  overflow: hidden; max-height: 90vh; overflow-y: auto;
+}
+.mp-head {
+  background: linear-gradient(180deg, #2f6b3f, #1e4d2b);
+  color: #fff; padding: 20px; text-align: center;
+}
+.mp-head .mp-logo { font-size: 40px; margin-bottom: 6px; }
+.mp-head h2 { font-size: 20px; margin: 0 0 4px; }
+.mp-head p { font-size: 13px; opacity: 0.8; margin: 0; }
+.mp-body { padding: 20px; }
 
-  /* 大廳 */
-  .mp-room-code-box {
-    background: #1e4d2b; color: #c9a84c;
-    font-family: monospace; font-size: 38px; font-weight: 700;
-    text-align: center; letter-spacing: 10px;
-    padding: 18px; border-radius: 12px; margin: 10px 0;
-  }
-  .mp-player-item {
-    display: flex; align-items: center; gap: 10px;
-    padding: 9px 0; border-bottom: 1px solid #f0f4ef;
-  }
-  .mp-player-item:last-child { border-bottom: none; }
-  .mp-avatar {
-    width: 34px; height: 34px; border-radius: 50%;
-    background: #2f6b3f; color: #fff;
-    display: flex; align-items: center; justify-content: center;
-    font-weight: 700; font-size: 13px; overflow: hidden; flex-shrink: 0;
-  }
-  .mp-avatar img { width: 100%; height: 100%; object-fit: cover; }
-  .mp-badge {
-    font-size: 11px; padding: 2px 7px; border-radius: 20px; font-weight: 700;
-  }
-  .mp-badge-host { background: #c9a84c; color: #1e4d2b; }
-  .mp-badge-you { background: #2f6b3f; color: #fff; }
-  .mp-info-row { display:flex; justify-content:space-between; font-size:13px; color:#7c8879; margin-bottom:5px; }
-  .mp-info-row strong { color: #18311f; }
+.mp-btn {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; padding: 13px; border-radius: 12px;
+  font-size: 15px; font-weight: 700; cursor: pointer;
+  border: none; transition: all 0.15s; font-family: inherit;
+  margin-bottom: 10px;
+}
+.mp-btn:active { transform: scale(0.97); }
+.mp-btn-google { background: #fff; color: #333; border: 2px solid #ddd; }
+.mp-btn-google:hover { border-color: #999; }
+.mp-btn-primary { background: #2f6b3f; color: #fff; }
+.mp-btn-primary:hover { background: #1e4d2b; }
+.mp-btn-outline { background: transparent; color: #2f6b3f; border: 2px solid #2f6b3f; }
+.mp-btn-outline:hover { background: #2f6b3f; color: #fff; }
+.mp-btn-ghost { background: none; color: #999; font-size: 13px; border: none; }
 
-  /* toast */
-  #mp-toast {
-    position: fixed; bottom: 70px; left: 50%;
-    transform: translateX(-50%) translateY(60px);
-    background: #1e4d2b; color: #fff;
-    padding: 10px 18px; border-radius: 24px;
-    font-size: 13px; font-weight: 500;
-    transition: transform 0.3s; z-index: 9998;
-    white-space: nowrap;
-    box-shadow: 0 4px 14px rgba(0,0,0,0.3);
-  }
-  #mp-toast.show { transform: translateX(-50%) translateY(0); }
+.mp-divider { display:flex; align-items:center; gap:10px; color:#999; font-size:12px; margin: 14px 0; }
+.mp-divider::before,.mp-divider::after { content:''; flex:1; height:1px; background:#eee; }
 
-  /* body padding for bar */
-  body.mp-active { padding-bottom: 56px; }
+.mp-input {
+  width: 100%; padding: 12px 14px;
+  border: 2px solid #d6e2d3; border-radius: 10px;
+  font-size: 15px; font-family: inherit; outline: none;
+  margin-bottom: 10px; transition: border-color 0.15s;
+  box-sizing: border-box;
+}
+.mp-input:focus { border-color: #2f6b3f; }
+.mp-input.code-input {
+  font-family: monospace; font-size: 28px;
+  text-align: center; letter-spacing: 8px;
+  text-transform: uppercase;
+}
+.mp-label { font-size: 12px; font-weight: 700; color: #7c8879; margin-bottom: 5px; display: block; text-transform: uppercase; letter-spacing: 0.5px; }
+.mp-error { background: #fee2e2; color: #b91c1c; border-radius: 8px; padding: 10px 14px; font-size: 13px; margin-bottom: 10px; display: none; }
+
+/* 房間碼顯示 */
+.mp-room-code {
+  background: #1e4d2b; color: #c9a84c;
+  font-family: monospace; font-size: 36px; font-weight: 700;
+  text-align: center; letter-spacing: 10px;
+  padding: 16px; border-radius: 12px; margin: 8px 0;
+  cursor: pointer;
+}
+.mp-copy-btn {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  width: 100%; background: rgba(201,168,76,0.15);
+  border: 1px solid rgba(201,168,76,0.4); color: #c9a84c;
+  border-radius: 8px; padding: 7px; font-size: 13px;
+  cursor: pointer; margin-bottom: 12px; font-family: inherit;
+}
+
+/* 球員列表 */
+.mp-player-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 0; border-bottom: 1px solid #f0f4ef;
+}
+.mp-player-item:last-child { border-bottom: none; }
+.mp-avatar {
+  width: 34px; height: 34px; border-radius: 50%;
+  background: #2f6b3f; color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 13px; overflow: hidden; flex-shrink: 0;
+}
+.mp-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.mp-badge { font-size: 11px; padding: 2px 7px; border-radius: 20px; font-weight: 700; }
+.mp-badge-host { background: #c9a84c; color: #1e4d2b; }
+.mp-badge-you { background: #2f6b3f; color: #fff; }
+
+/* 底部 bar */
+#mp-bar {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  background: #1e4d2b; color: #fff;
+  padding: 10px 16px;
+  display: flex; align-items: center; gap: 10px;
+  z-index: 9000; box-shadow: 0 -2px 12px rgba(0,0,0,0.25);
+  font-size: 13px; transform: translateY(100%);
+  transition: transform 0.3s ease;
+}
+#mp-bar.show { transform: translateY(0); }
+#mp-bar .mp-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #4ade80; flex-shrink: 0;
+  animation: mppulse 2s infinite;
+}
+@keyframes mppulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+#mp-bar .mp-bar-code { font-family: monospace; font-size: 15px; font-weight: 700; color: #c9a84c; letter-spacing: 3px; }
+#mp-bar .mp-bar-players { flex: 1; font-size: 12px; color: #a7c4ae; }
+#mp-bar .mp-leave-btn {
+  background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3);
+  color: #fff; border-radius: 8px; padding: 5px 12px;
+  font-size: 12px; cursor: pointer; flex-shrink: 0; font-family: inherit;
+}
+
+/* 球友模式：隱藏設定頁面，只顯示計分和結算 */
+body.guest-mode #setting { display: none !important; }
+body.guest-mode .tab-btn[data-tab="setting"] { display: none !important; }
+body.guest-mode { padding-bottom: 56px; }
+body.host-mode { padding-bottom: 56px; }
+
+/* toast */
+#mp-toast {
+  position: fixed; bottom: 70px; left: 50%;
+  transform: translateX(-50%) translateY(60px);
+  background: #1e4d2b; color: #fff;
+  padding: 10px 18px; border-radius: 24px;
+  font-size: 13px; font-weight: 500;
+  transition: transform 0.3s; z-index: 9998;
+  white-space: nowrap; box-shadow: 0 4px 14px rgba(0,0,0,0.3);
+}
+#mp-toast.show { transform: translateX(-50%) translateY(0); }
 </style>
 
 <!-- TOAST -->
 <div id="mp-toast"></div>
 
-<!-- BOTTOM BAR (shown when in a game) -->
+<!-- BOTTOM BAR -->
 <div id="mp-bar">
   <div class="mp-dot"></div>
-  <span class="mp-room" id="mpBarCode"></span>
-  <span class="mp-players" id="mpBarPlayers"></span>
-  <button class="mp-leave" onclick="mpLeaveGame()">離開球局</button>
+  <span class="mp-bar-code" id="mpBarCode"></span>
+  <span class="mp-bar-players" id="mpBarPlayers"></span>
+  <button class="mp-leave-btn" onclick="mpLeave()">離開球局</button>
 </div>
 
 <!-- OVERLAY -->
 <div id="mp-overlay">
-  <!-- Screen: Login -->
+
+  <!-- 登入畫面 -->
   <div class="mp-sheet" id="mp-screen-login">
-    <div class="mp-sheet-head">
+    <div class="mp-head">
       <div class="mp-logo">⛳</div>
-      <h2>Golf Score 多人版</h2>
-      <p>登入後建立或加入球局，成績即時同步</p>
+      <h2>Golf Score</h2>
+      <p>多人即時計分</p>
     </div>
-    <div class="mp-sheet-body">
+    <div class="mp-body">
       <button class="mp-btn mp-btn-google" onclick="mpGoogleLogin()">
         <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
         使用 Google 帳號登入
@@ -4668,79 +4653,63 @@
       <div class="mp-divider">或</div>
       <label class="mp-label">暱稱（不需要帳號）</label>
       <input class="mp-input" id="mpAnonName" placeholder="例：小明、阿志" maxlength="10" />
-      <button class="mp-btn mp-btn-outline" onclick="mpAnonLogin()">快速進入（匿名）</button>
+      <button class="mp-btn mp-btn-outline" onclick="mpAnonLogin()">快速進入</button>
       <div class="mp-error" id="mpLoginError"></div>
-      <div class="mp-loading" id="mpLoginLoading">登入中...</div>
     </div>
   </div>
 
-  <!-- Screen: Home -->
+  <!-- 首頁 -->
   <div class="mp-sheet" id="mp-screen-home" style="display:none">
-    <div class="mp-sheet-head">
+    <div class="mp-head">
       <div class="mp-logo">⛳</div>
       <h2 id="mpWelcomeName">您好！</h2>
-      <p>建立球局邀請球友，或輸入房間碼加入</p>
+      <p>建立球局或輸入房間碼加入</p>
     </div>
-    <div class="mp-sheet-body">
-      <button class="mp-btn mp-btn-primary" onclick="mpCreateGame()" style="margin-bottom:10px">🏌️ 建立新球局</button>
-      <button class="mp-btn mp-btn-outline" onclick="mpShowScreen('join')" style="margin-bottom:14px">🤝 加入球局</button>
+    <div class="mp-body">
+      <button class="mp-btn mp-btn-primary" onclick="mpCreateGame()">🏌️ 建立新球局</button>
+      <button class="mp-btn mp-btn-outline" onclick="mpShowScreen('join')">🤝 加入球局</button>
       <div class="mp-divider"></div>
-      <button class="mp-btn" style="background:none;color:#999;font-size:13px;border:none" onclick="mpLogout()">登出</button>
+      <button class="mp-btn mp-btn-ghost" onclick="mpLogout()">登出</button>
     </div>
   </div>
 
-  <!-- Screen: Create -->
-  <div class="mp-sheet" id="mp-screen-create" style="display:none">
-    <div class="mp-sheet-head" style="padding:16px 20px">
-      <h2 style="margin:0;font-size:17px">🏌️ 新球局</h2>
-    </div>
-    <div class="mp-sheet-body">
-      <p style="color:#7c8879;font-size:13px;margin:0 0 16px">系統會產生一個 4 碼房間碼，分享給球友加入。</p>
-      <div class="mp-error" id="mpCreateError"></div>
-      <button class="mp-btn mp-btn-primary" onclick="mpCreateGame()" style="margin-bottom:10px">建立新球局</button>
-      <button class="mp-btn" style="background:none;color:#999;font-size:13px;border:none" onclick="mpShowScreen('home')">← 返回</button>
-    </div>
-  </div>
-
-  <!-- Screen: Join -->
+  <!-- 加入球局 -->
   <div class="mp-sheet" id="mp-screen-join" style="display:none">
-    <div class="mp-sheet-head" style="padding:16px 20px">
+    <div class="mp-head" style="padding:16px 20px">
       <h2 style="margin:0;font-size:17px">🤝 加入球局</h2>
     </div>
-    <div class="mp-sheet-body">
-      <label class="mp-label">房間碼</label>
-      <input class="mp-input code" id="mpJoinCode" placeholder="ABCD" maxlength="4" />
+    <div class="mp-body">
+      <label class="mp-label">輸入房間碼</label>
+      <input class="mp-input code-input" id="mpJoinCode" placeholder="ABCD" maxlength="4" />
       <div class="mp-error" id="mpJoinError"></div>
-      <button class="mp-btn mp-btn-primary" onclick="mpJoinGame()" style="margin-bottom:10px">加入</button>
-      <button class="mp-btn" style="background:none;color:#999;font-size:13px;border:none" onclick="mpShowScreen('home')">← 返回</button>
+      <button class="mp-btn mp-btn-primary" onclick="mpJoinGame()">加入</button>
+      <button class="mp-btn mp-btn-ghost" onclick="mpShowScreen('home')">← 返回</button>
     </div>
   </div>
 
-  <!-- Screen: Lobby -->
+  <!-- 等待室 -->
   <div class="mp-sheet" id="mp-screen-lobby" style="display:none">
-    <div class="mp-sheet-head" style="padding:16px 20px">
+    <div class="mp-head" style="padding:16px 20px">
       <h2 style="margin:0;font-size:17px">⏳ 等待球友加入</h2>
     </div>
-    <div class="mp-sheet-body">
-      <div class="mp-label">房間碼（分享給球友）</div>
-      <div class="mp-room-code-box" id="mpLobbyCode" onclick="mpCopyCode()" style="cursor:pointer;" title="點擊複製">----</div>
-      <button onclick="mpCopyCode()" style="display:flex;align-items:center;justify-content:center;gap:6px;width:100%;background:rgba(255,255,255,0.1);border:1px solid rgba(201,168,76,0.4);color:#c9a84c;border-radius:8px;padding:7px;font-size:13px;cursor:pointer;margin-top:-4px;margin-bottom:8px;">
-        📋 複製房間碼
-      </button>
-      <div id="mpLobbyInfo" style="margin:12px 0"></div>
+    <div class="mp-body">
+      <div class="mp-label">房間碼</div>
+      <div class="mp-room-code" id="mpLobbyCode" onclick="mpCopyCode()">----</div>
+      <button class="mp-copy-btn" onclick="mpCopyCode()">📋 複製房間碼</button>
       <div class="mp-label">已加入（<span id="mpPlayerCount">0</span>/4 人）</div>
       <div id="mpLobbyPlayerList" style="margin-bottom:14px"></div>
       <div class="mp-error" id="mpLobbyError"></div>
-      <button class="mp-btn mp-btn-primary" id="mpStartBtn" onclick="mpStartGame()" style="display:none;margin-bottom:10px">開始計分 ▶</button>
-      <button class="mp-btn" style="background:none;color:#999;font-size:13px;border:none" onclick="mpLeaveGame()">離開球局</button>
+      <button class="mp-btn mp-btn-primary" id="mpStartBtn" onclick="mpStartGame()" style="display:none">開始計分 ▶</button>
+      <button class="mp-btn mp-btn-ghost" onclick="mpLeave()">離開球局</button>
     </div>
   </div>
+
 </div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult, signInAnonymously, onAuthStateChanged, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getDatabase, ref, set, get, update, remove, onValue, off, child } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+import { getDatabase, ref, set, get, update, remove, onValue, off } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
 // ── CONFIG ───────────────────────────────────────────────
 const firebaseConfig = {
@@ -4760,30 +4729,19 @@ const db = getDatabase(app);
 // ── STATE ────────────────────────────────────────────────
 let mpUser = null;
 let mpGameId = null;
-let mpGameListener = null;
 let mpIsHost = false;
+let mpGameListener = null;
 let mpSyncTimer = null;
-let mpIsApplyingRemote = false; // 防止 remote → local → remote 無限迴圈
-let mpLastPlayerCount = 0;
+let mpIsApplyingRemote = false;
 
-// ── GENERATE CODE ────────────────────────────────────────
-function mpGenCode() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let code = '';
-  for(let i=0;i<4;i++) code += chars[Math.floor(Math.random()*chars.length)];
-  return code;
-}
-
-// ── AUTH STATE ───────────────────────────────────────────
+// ── AUTH ─────────────────────────────────────────────────
 onAuthStateChanged(auth, async user => {
   if (user) {
     mpUser = user;
     const name = user.displayName || '球友';
     document.getElementById('mpWelcomeName').textContent = `${name.split(' ')[0]}，您好！`;
-    // handle redirect result
     try { await getRedirectResult(auth); } catch(e) {}
-    // 載入共用球場資料
-    await mpLoadCoursesFromFirebase();
+    await mpLoadSharedData();
     mpShowScreen('home');
   } else {
     mpUser = null;
@@ -4791,61 +4749,88 @@ onAuthStateChanged(auth, async user => {
   }
 });
 
-// ── LOGIN ────────────────────────────────────────────────
 window.mpGoogleLogin = async () => {
-  document.getElementById('mpLoginLoading').style.display = 'block';
-  document.getElementById('mpLoginError').style.display = 'none';
-  try {
-    await signInWithRedirect(auth, new GoogleAuthProvider());
-  } catch(e) {
-    document.getElementById('mpLoginLoading').style.display = 'none';
-    mpShowError('mpLoginError', '登入失敗：' + e.message);
-  }
+  mpHideError('mpLoginError');
+  try { await signInWithRedirect(auth, new GoogleAuthProvider()); }
+  catch(e) { mpShowError('mpLoginError', '登入失敗：' + e.message); }
 };
 
 window.mpAnonLogin = async () => {
   const name = document.getElementById('mpAnonName').value.trim();
   if (!name) { mpShowError('mpLoginError', '請輸入暱稱'); return; }
-  document.getElementById('mpLoginLoading').style.display = 'block';
-  document.getElementById('mpLoginError').style.display = 'none';
   try {
     const cred = await signInAnonymously(auth);
     await updateProfile(cred.user, { displayName: name });
-    mpUser = cred.user;
-    mpUser.displayName = name;
-  } catch(e) {
-    document.getElementById('mpLoginLoading').style.display = 'none';
-    mpShowError('mpLoginError', '登入失敗：' + e.message);
-  }
+    mpUser = cred.user; mpUser.displayName = name;
+  } catch(e) { mpShowError('mpLoginError', '登入失敗：' + e.message); }
 };
 
 window.mpLogout = async () => {
-  mpLeaveGame();
+  mpLeave();
   await signOut(auth);
 };
 
+// ── SHARED DATA (球場 + 讓洞記憶) ────────────────────────
+async function mpLoadSharedData() {
+  try {
+    const snap = await get(ref(db, 'shared'));
+    if (!snap.exists()) return;
+    const shared = snap.val();
+    if (shared.courses) {
+      const local = JSON.parse(localStorage.getItem('golfSavedCoursesV21') || '{}');
+      localStorage.setItem('golfSavedCoursesV21', JSON.stringify({ ...local, ...shared.courses }));
+    }
+    if (shared.hdcpMemory) {
+      const local = JSON.parse(localStorage.getItem('golfHdcpMemoryV1') || '{}');
+      localStorage.setItem('golfHdcpMemoryV1', JSON.stringify({ ...local, ...shared.hdcpMemory }));
+    }
+    if (typeof refreshSavedCourseSelect === 'function') refreshSavedCourseSelect();
+  } catch(e) { console.error('mpLoadSharedData', e); }
+}
+
+// 新增球場時同步到 Firebase
+const _origSetSavedCourses = window.setSavedCourses;
+if (typeof setSavedCourses === 'function') {
+  const orig = setSavedCourses;
+  window.setSavedCourses = function(data) {
+    orig(data);
+    update(ref(db, 'shared'), { courses: data }).catch(() => {});
+  };
+}
+
+// 讓洞記憶同步
+const _origSetHdcpMemory = window.setHdcpMemory;
+if (typeof setHdcpMemory === 'function') {
+  const orig = setHdcpMemory;
+  window.setHdcpMemory = function(data) {
+    orig(data);
+    update(ref(db, 'shared'), { hdcpMemory: data }).catch(() => {});
+  };
+}
+
 // ── CREATE GAME ──────────────────────────────────────────
 window.mpCreateGame = async () => {
-  const label = '球局';
-  let code = mpGenCode();
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = Array.from({length:4}, () => chars[Math.floor(Math.random()*chars.length)]).join('');
   const snap = await get(ref(db, `games/${code}`));
-  if (snap.exists()) code = mpGenCode();
+  if (snap.exists()) code = Array.from({length:4}, () => chars[Math.floor(Math.random()*chars.length)]).join('');
 
-  const gameData = {
-    code, label,
-    status: 'lobby',
+  await set(ref(db, `games/${code}`), {
+    code,
     hostUid: mpUser.uid,
+    status: 'lobby',
     createdAt: Date.now(),
     players: {
       [mpUser.uid]: {
         name: mpUser.displayName || '球友',
         photo: mpUser.photoURL || '',
+        isHost: true,
         joinedAt: Date.now()
       }
     },
     state: null
-  };
-  await set(ref(db, `games/${code}`), gameData);
+  });
+
   mpGameId = code;
   mpIsHost = true;
   mpEnterLobby(code);
@@ -4860,16 +4845,20 @@ window.mpJoinGame = async () => {
   const game = snap.val();
   if (game.status === 'finished') { mpShowError('mpJoinError', '這個球局已結束'); return; }
   const pCount = Object.keys(game.players || {}).length;
-  if (pCount >= 4 && !game.players[mpUser.uid]) { mpShowError('mpJoinError', '球局已滿 4 人'); return; }
+  if (pCount >= 4 && !game.players?.[mpUser.uid]) { mpShowError('mpJoinError', '球局已滿 4 人'); return; }
+
   await update(ref(db, `games/${code}/players/${mpUser.uid}`), {
     name: mpUser.displayName || '球友',
     photo: mpUser.photoURL || '',
+    isHost: false,
     joinedAt: Date.now()
   });
+
   mpGameId = code;
-  mpIsHost = game.hostUid === mpUser.uid;
+  mpIsHost = false;
+
   if (game.status === 'playing') {
-    mpEnterGame(code, game);
+    mpEnterGame(code, game.state);
   } else {
     mpEnterLobby(code);
   }
@@ -4879,7 +4868,8 @@ window.mpJoinGame = async () => {
 function mpEnterLobby(code) {
   mpShowScreen('lobby');
   document.getElementById('mpLobbyCode').textContent = code;
-  if (mpGameListener) off(ref(db, `games/${mpGameId}`));
+
+  if (mpGameListener) { off(ref(db, `games/${mpGameId}`)); mpGameListener = null; }
   mpGameListener = onValue(ref(db, `games/${code}`), snap => {
     if (!snap.exists()) { mpShowScreen('home'); return; }
     const game = snap.val();
@@ -4887,325 +4877,172 @@ function mpEnterLobby(code) {
     document.getElementById('mpPlayerCount').textContent = players.length;
     document.getElementById('mpLobbyPlayerList').innerHTML = players.map(([uid, p]) => `
       <div class="mp-player-item">
-        <div class="mp-avatar">${p.photo ? `<img src="${p.photo}"/>` : p.name[0]}</div>
+        <div class="mp-avatar">${p.photo ? `<img src="${p.photo}"/>` : (p.name||'?')[0]}</div>
         <div style="flex:1;font-size:14px;font-weight:500">${p.name}</div>
-        ${uid === game.hostUid ? '<span class="mp-badge mp-badge-host">主持人</span>' : ''}
+        ${p.isHost ? '<span class="mp-badge mp-badge-host">主持人</span>' : ''}
         ${uid === mpUser.uid ? '<span class="mp-badge mp-badge-you">我</span>' : ''}
-        ${uid === mpUser.uid ? `<button onclick="mpRenameInLobby()" style="background:none;border:none;cursor:pointer;font-size:16px;padding:4px 6px;color:#7c8879;">✏️</button>` : ''}
+        ${uid === mpUser.uid ? `<button onclick="mpRename()" style="background:none;border:none;cursor:pointer;font-size:16px;padding:4px 6px;">✏️</button>` : ''}
       </div>
     `).join('');
+
     const startBtn = document.getElementById('mpStartBtn');
-    if (game.hostUid === mpUser.uid) {
+    if (mpIsHost) {
       startBtn.style.display = 'flex';
-      startBtn.textContent = players.length >= 2 ? `開始計分 ▶（${players.length} 人）` : `等待球友加入（目前 ${players.length} 人）`;
-      startBtn.disabled = players.length < 1;
+      startBtn.textContent = `開始計分 ▶（${players.length} 人）`;
     } else {
       startBtn.style.display = 'none';
     }
-    if (game.status === 'playing') mpEnterGame(code, game);
+    if (game.status === 'playing') mpEnterGame(code, game.state);
   });
 }
 
 window.mpStartGame = async () => {
-  // 取得等待室球友，建立初始 fields
-  const snap = await get(ref(db, `games/${mpGameId}`));
-  if (!snap.exists()) return;
-  const game = snap.val();
-  const players = Object.entries(game.players || {});
-  const sorted = [
-    ...players.filter(([uid]) => uid === mpUser.uid),
-    ...players.filter(([uid]) => uid !== mpUser.uid)
-  ];
-
-  // 初始 fields：只有玩家名字，其他設定等主持人在設定頁操作後即時同步
-  const initFields = {};
-  sorted.forEach(([uid, p], idx) => { initFields[`name${idx}`] = p.name; });
-
-  // 清除舊 fields，寫入新的初始資料
-  await set(ref(db, `games/${mpGameId}/fields`), initFields);
   await update(ref(db, `games/${mpGameId}`), { status: 'playing', state: null });
 };
 
-
-// ── RENAME IN LOBBY ──────────────────────────────────────
-window.mpRenameInLobby = async () => {
+window.mpRename = async () => {
   const current = mpUser.displayName || '球友';
-  const newName = window.prompt('修改你在球局的名字：', current);
-  if (!newName || !newName.trim() || newName.trim() === current) return;
+  const newName = window.prompt('修改名字：', current);
+  if (!newName?.trim() || newName.trim() === current) return;
   const trimmed = newName.trim().slice(0, 10);
   await updateProfile(mpUser, { displayName: trimmed });
   mpUser.displayName = trimmed;
   await update(ref(db, `games/${mpGameId}/players/${mpUser.uid}`), { name: trimmed });
 };
+
+window.mpCopyCode = async () => {
+  const code = document.getElementById('mpLobbyCode').textContent.trim();
+  if (!code || code === '----') return;
+  try { await navigator.clipboard.writeText(code); } catch(e) {
+    const el = document.createElement('input');
+    el.value = code; document.body.appendChild(el); el.select();
+    document.execCommand('copy'); document.body.removeChild(el);
+  }
+  mpToast('✅ 已複製房間碼：' + code);
+};
+
 // ── ENTER GAME ───────────────────────────────────────────
-function mpEnterGame(code, game) {
+function mpEnterGame(code, state) {
   // 關閉 overlay
   document.getElementById('mp-overlay').classList.add('hide');
-  document.body.classList.add('mp-active');
 
   // 顯示底部 bar
-  const bar = document.getElementById('mp-bar');
-  bar.classList.add('show');
+  document.getElementById('mp-bar').classList.add('show');
   document.getElementById('mpBarCode').textContent = code;
 
-  // 清除 localStorage 舊資料
-  localStorage.removeItem('golfAutoSaveBeta15');
-  // 清空 DOM
-  if (typeof clearCurrentRoundData === 'function') clearCurrentRoundData(false);
-
-  // 如果有 fields 資料，套用；否則填入球友名字
-  if (game.fields && Object.keys(game.fields).length > 0) {
-    mpApplyFields(game.fields);
+  if (mpIsHost) {
+    // 主持人：完整 1.74 介面
+    document.body.classList.add('host-mode');
+    // 清空並重新開始
+    localStorage.removeItem('golfAutoSaveBeta15');
+    if (typeof clearCurrentRoundData === 'function') clearCurrentRoundData(false);
+    // 掛載同步
+    mpHookHostSync();
   } else {
-    mpFillPlayersFromLobby(game);
+    // 球友：只顯示計分和結算
+    document.body.classList.add('guest-mode');
+    // 套用主持人的 state
+    if (state) mpApplyState(state);
+    // 允許球友填成績
+    mpHookGuestScoreSync();
   }
 
-  // 監聽 players 變化（底部 bar 和中途加入）
-  if (mpGameListener) off(ref(db, `games/${mpGameId}`));
-  mpGameListener = onValue(ref(db, `games/${code}/players`), snap => {
-    if (!snap.exists()) {
-      // 主持人已刪除球局，強制離開
-      mpForceLeave();
-      return;
-    }
-    const players = snap.val();
-    const g = { players, fields: null };
+  // 監聽 Firebase 更新
+  if (mpGameListener) { off(ref(db, `games/${mpGameId}`)); mpGameListener = null; }
+  mpGameListener = onValue(ref(db, `games/${code}`), snap => {
+    if (!snap.exists()) { mpForceLeave(); return; }
+    const game = snap.val();
+
     // 更新底部 bar
-    mpUpdateBarPlayers(g);
-    // 中途加入的新玩家
-    const currentPlayerCount = Object.keys(players || {}).length;
-    if (currentPlayerCount > (mpLastPlayerCount || 0)) {
-      mpFillLatePlayer({ players }, mpLastPlayerCount || 0);
+    const players = Object.values(game.players || {});
+    document.getElementById('mpBarPlayers').textContent = players.map(p => p.name.split(' ')[0]).join('、');
+
+    // 套用 state（只有球友套用，主持人不套用避免迴圈）
+    if (!mpIsHost && game.state && !mpIsApplyingRemote) {
+      mpApplyState(game.state);
     }
-    mpLastPlayerCount = currentPlayerCount;
-  });
 
-  // 監聽 fields 節點（所有設定和成績的即時同步）
-  let mpFieldsListener = null;
-  if (mpFieldsListener) off(ref(db, `games/${code}/fields`));
-  mpFieldsListener = onValue(ref(db, `games/${code}/fields`), snap => {
-    if (!snap.exists()) return; // fields 可能一開始是空的，不需要強制離開
-    const fields = snap.val();
-    if (fields) mpApplyFields(fields);
+    // 主持人的成績更新由球友觸發
+    if (mpIsHost && game.guestScores && !mpIsApplyingRemote) {
+      mpApplyGuestScores(game.guestScores);
+    }
   });
-  // 把 fieldsListener 存起來，離開時清除
-  window._mpFieldsListener = { code, listener: mpFieldsListener };
-
-  // 啟動同步
-  mpHookAutoSave();
 }
 
-// ── APPLY FIELDS ─────────────────────────────────────────
-// 把 Firebase fields 節點的值直接套到 DOM
-function mpApplyFields(fields) {
-  if (!fields) return;
-  mpIsApplyingRemote = true;
-  try {
-    let needRenderScoreboard = false;
-    let needRenderMode = false;
-    let needUpdateNames = false;
+// ── HOST SYNC：主持人任何操作 → Firebase ─────────────────
+function mpHookHostSync() {
+  document.addEventListener('input', mpHostOnChange, true);
+  document.addEventListener('change', mpHostOnChange, true);
+}
 
-    // 球場
-    if ('savedCourse' in fields) {
-      if (mpSetVal('savedCourseSelect', fields.savedCourse)) {
-        if (typeof handleSavedCourseSelect === 'function') handleSavedCourseSelect();
-        needRenderScoreboard = true;
-      }
-    }
-    if ('startHole' in fields && mpSetVal('startHole', fields.startHole)) needRenderScoreboard = true;
+function mpHostOnChange() {
+  if (mpIsApplyingRemote) return;
+  clearTimeout(mpSyncTimer);
+  mpSyncTimer = setTimeout(async () => {
+    if (!mpGameId || !mpIsHost) return;
+    try {
+      const state = collectAppState();
+      await update(ref(db, `games/${mpGameId}`), { state });
+    } catch(e) { console.error('mpHostSync', e); }
+  }, 400);
+}
 
-    // 點數倍率
-    ['pointVal','mB','mE4','mE5','mHIO'].forEach(k => { if (k in fields) mpSetVal(k, fields[k]); });
+// ── GUEST SCORE SYNC：球友填成績 → Firebase ──────────────
+function mpHookGuestScoreSync() {
+  // 只監聽成績欄位
+  document.addEventListener('input', mpGuestOnScoreChange, true);
+  document.addEventListener('change', mpGuestOnScoreChange, true);
+}
 
-    // 比賽模式
-    ['modeVegas','extMode','modeMatch','modePar'].forEach(k => {
-      if (k in fields && mpSetVal(k, fields[k])) needRenderMode = true;
-    });
-    if (needRenderMode && typeof applyModeStates === 'function') applyModeStates();
-
-    // 玩家名字
-    for (let i=0; i<4; i++) {
-      const k = `name${i}`;
-      if (k in fields && mpSetVal(k, fields[k])) needUpdateNames = true;
-    }
-    if (needUpdateNames && typeof updateNames === 'function') updateNames(true);
-
-    // 玩家參賽
-    for (let i=0; i<4; i++) {
-      [`p${i}_m`, `p${i}_p`, `vegasRank${i}`].forEach(k => {
-        if (k in fields) mpSetVal(k, fields[k]);
-      });
-    }
-
-    // 讓洞配對
-    ['0_1','0_2','0_3','1_2','1_3','2_3'].forEach(k => {
-      const [a,b] = k.split('_');
-      if (`pair_checked_${k}` in fields && typeof setPairState === 'function') {
-        setPairState(Number(a), Number(b), !!fields[`pair_checked_${k}`], String(fields[`pair_val_${k}`]||'0'), true);
-      }
-      if (`pair_val_${k}` in fields) mpSetVal(`pair-strokes-${a}-${b}`, fields[`pair_val_${k}`]);
-      if (`pair_mode_${k}` in fields && typeof setPairHandicapMode === 'function') {
-        setPairHandicapMode(Number(a), Number(b), fields[`pair_mode_${k}`] || 'general', true);
-      }
-      if (`pair_offset_${k}` in fields) {
-        mpSetVal(`pair-offset-${a}-${b}`, fields[`pair_offset_${k}`]);
-        const box = document.getElementById(`pair-offset-box-${a}-${b}`);
-        if (box) box.classList.toggle('active', !!fields[`pair_offset_${k}`]);
-      }
-      ['p3','p4','p5'].forEach(kind => {
-        const fk = `pair_${kind}_${k}`;
-        if (fk in fields) mpSetVal(`pair-special-${kind}-${a}-${b}`, fields[fk]);
-      });
-    });
-
-    // 渲染
-    if (needRenderScoreboard && typeof renderScoreboard === 'function') renderScoreboard();
-
-    // 成績（跳過正在輸入的格子）
-    const focusedId = document.activeElement?.id;
-    for (let i=0; i<4; i++) {
+function mpGuestOnScoreChange(e) {
+  if (mpIsApplyingRemote) return;
+  const id = e.target?.id;
+  if (!id || !id.startsWith('cell_')) return;
+  clearTimeout(mpSyncTimer);
+  mpSyncTimer = setTimeout(async () => {
+    if (!mpGameId) return;
+    // 收集所有成績
+    const scores = {};
+    [0,1,2,3].forEach(i => {
       for (let h=1; h<=18; h++) {
-        const fk = `score_${i}_${h}`;
-        if (!(fk in fields)) continue;
-        const cellId = `cell_${i}_${h}`;
-        if (cellId === focusedId) continue;
-        if (mpSetVal(cellId, fields[fk])) {
-          if (typeof drawMark === 'function') drawMark(i, h, false);
-        }
+        const v = document.getElementById(`cell_${i}_${h}`)?.value;
+        if (v) scores[`${i}_${h}`] = v;
       }
-    }
-    if (typeof updateParTotals === 'function') updateParTotals();
-    if (typeof getActivePlayers === 'function') {
-      getActivePlayers().forEach(p => {
-        if (typeof updatePlayerTotals === 'function') updatePlayerTotals(p);
-      });
-    }
-    if (typeof updateVegasPreview === 'function') updateVegasPreview();
-
-    // 讓洞記憶帶入
-    if (needUpdateNames || needRenderMode) {
-      setTimeout(() => {
-        if (typeof applyHdcpMemoryAndNotify === 'function') applyHdcpMemoryAndNotify();
-      }, 100);
-    }
-
-    // 更新底部 bar
-    const barNames = [];
-    for (let i=0; i<4; i++) {
-      const n = fields[`name${i}`] || document.getElementById(`name${i}`)?.value;
-      if (n && n.trim()) barNames.push(n.trim());
-    }
-    if (barNames.length > 0) {
-      document.getElementById('mpBarPlayers').textContent = barNames.join('、');
-    }
-
-  } catch(e) {
-    console.error('mpApplyFields error', e);
-  } finally {
-    setTimeout(() => { mpIsApplyingRemote = false; }, 100);
-  }
+    });
+    await update(ref(db, `games/${mpGameId}`), { guestScores: scores });
+  }, 400);
 }
 
-// ── APPLY REMOTE STATE ───────────────────────────────────
-function mpSetVal(id, val) {
-  const el = document.getElementById(id);
-  if (!el) return false;
-  if (el.type === 'checkbox') {
-    if (el.checked !== !!val) { el.checked = !!val; return true; }
-  } else {
-    if (el.value !== String(val ?? '')) { el.value = val ?? ''; return true; }
-  }
-  return false;
-}
-
-function mpApplyRemoteState(state) {
+// ── APPLY STATE（球友套用主持人 state）───────────────────
+function mpApplyState(state) {
   if (!state || typeof state !== 'object') return;
   mpIsApplyingRemote = true;
   try {
-    let needRenderScoreboard = false;
-    let needRenderMode = false;
+    localStorage.setItem('golfAutoSaveBeta15', JSON.stringify(state));
+    if (typeof restoreAutoSave === 'function') restoreAutoSave();
+    setTimeout(() => {
+      if (typeof applyHdcpMemoryAndNotify === 'function') applyHdcpMemoryAndNotify();
+    }, 500);
+  } catch(e) { console.error('mpApplyState', e); }
+  finally { setTimeout(() => { mpIsApplyingRemote = false; }, 600); }
+}
 
-    // 1. 球場下拉選單
-    if (state.savedCourse !== undefined) {
-      if (mpSetVal('savedCourseSelect', state.savedCourse)) {
-        if (typeof handleSavedCourseSelect === 'function') handleSavedCourseSelect();
-        needRenderScoreboard = true;
-      }
-    }
-
-    // 2. 起始洞
-    if (mpSetVal('startHole', state.startHole)) needRenderScoreboard = true;
-
-    // 3. 點數倍率
-    mpSetVal('pointVal', state.pointVal);
-    mpSetVal('mB', state.mB);
-    mpSetVal('mE4', state.mE4);
-    mpSetVal('mE5', state.mE5);
-    mpSetVal('mHIO', state.mHIO);
-
-    // 4. 比賽模式
-    if (mpSetVal('modeVegas', state.modeVegas)) needRenderMode = true;
-    if (mpSetVal('extMode', state.extMode)) needRenderMode = true;
-    if (mpSetVal('modeMatch', state.modeMatch)) needRenderMode = true;
-    if (mpSetVal('modePar', state.modePar)) needRenderMode = true;
-    if (needRenderMode && typeof applyModeStates === 'function') applyModeStates();
-
-    // 5. 玩家名字
-    let nameChanged = false;
-    for (let i = 0; i < 4; i++) {
-      const p = state[`name${i}`] ?? '';
-      if (mpSetVal(`name${i}`, p)) nameChanged = true;
-    }
-    if (nameChanged && typeof updateNames === 'function') updateNames(true);
-
-    // 6. 玩家參賽設定
-    for (let i = 0; i < 4; i++) {
-      mpSetVal(`p${i}_m`, state[`p${i}_m`]);
-      mpSetVal(`p${i}_p`, state[`p${i}_p`]);
-      const vr = document.getElementById(`vegasRank${i}`);
-      if (vr && state[`vegasRank${i}`] !== undefined) vr.value = state[`vegasRank${i}`] || '';
-    }
-
-    // 7. 讓洞配對設定
-    ['0_1','0_2','0_3','1_2','1_3','2_3'].forEach(key => {
-      const [a,b] = key.split('_');
-      const checked = state[`pair_checked_${key}`];
-      const val = state[`pair_val_${key}`];
-      const mode = state[`pair_mode_${key}`];
-      const offset = state[`pair_offset_${key}`];
-      if (checked !== undefined && typeof setPairState === 'function') {
-        setPairState(Number(a), Number(b), !!checked, String(val||'0'), true);
-      }
-      if (val !== undefined) mpSetVal(`pair-strokes-${a}-${b}`, val);
-      if (mode !== undefined && typeof setPairHandicapMode === 'function') {
-        setPairHandicapMode(Number(a), Number(b), mode || 'general', true);
-      }
-      if (offset !== undefined) {
-        mpSetVal(`pair-offset-${a}-${b}`, offset);
-        const offsetBox = document.getElementById(`pair-offset-box-${a}-${b}`);
-        if (offsetBox) offsetBox.classList.toggle('active', !!offset);
-      }
-      ['p3','p4','p5'].forEach(kind => {
-        const v = state[`pair_${kind}_${key}`];
-        if (v !== undefined) mpSetVal(`pair-special-${kind}-${a}-${b}`, v);
-      });
-    });
-
-    // 8. 渲染計分表
-    if (needRenderScoreboard && typeof renderScoreboard === 'function') renderScoreboard();
-
-    // 9. 成績（跳過正在輸入的格子）
+// ── APPLY GUEST SCORES（主持人套用球友成績）─────────────
+function mpApplyGuestScores(scores) {
+  if (!scores) return;
+  mpIsApplyingRemote = true;
+  try {
     const focusedId = document.activeElement?.id;
-    for (let i = 0; i < 4; i++) {
-      for (let h = 1; h <= 18; h++) {
-        const cellId = `cell_${i}_${h}`;
-        if (cellId === focusedId) continue;
-        const v = state[`score_${i}_${h}`];
-        if (mpSetVal(cellId, v !== undefined ? v : '')) {
-          if (typeof drawMark === 'function') drawMark(i, h, false);
-        }
+    Object.entries(scores).forEach(([key, val]) => {
+      const [i, h] = key.split('_');
+      const cellId = `cell_${i}_${h}`;
+      if (cellId === focusedId) return;
+      const el = document.getElementById(cellId);
+      if (el && el.value !== String(val)) {
+        el.value = val;
+        if (typeof drawMark === 'function') drawMark(Number(i), Number(h), false);
       }
-    }
+    });
     if (typeof updateParTotals === 'function') updateParTotals();
     if (typeof getActivePlayers === 'function') {
       getActivePlayers().forEach(p => {
@@ -5213,355 +5050,70 @@ function mpApplyRemoteState(state) {
       });
     }
     if (typeof updateVegasPreview === 'function') updateVegasPreview();
-
-    // 10. 讓洞記憶帶入
-    setTimeout(() => {
-      if (typeof applyHdcpMemoryAndNotify === 'function') applyHdcpMemoryAndNotify();
-    }, 200);
-
-  } catch(e) {
-    console.error('mpApplyRemoteState error', e);
-  } finally {
-    setTimeout(() => { mpIsApplyingRemote = false; }, 150);
-  }
+  } catch(e) { console.error('mpApplyGuestScores', e); }
+  finally { setTimeout(() => { mpIsApplyingRemote = false; }, 200); }
 }
 
-// ── UPDATE BAR PLAYERS ───────────────────────────────────
-function mpUpdateBarPlayers(game) {
-  let names = [];
-  const state = game.state;
-  if (state) {
-    try {
-      const parsed = typeof state === 'string' ? JSON.parse(state) : state;
-      // 從 state 裡找 name0~name3（新格式）
-      for (let i = 0; i <= 3; i++) {
-        const n = parsed[`name${i}`];
-        if (n && n.trim()) names.push(n.trim());
-      }
-    } catch(e) {}
-  }
-  // 如果 state 沒有名字，退回用目前 DOM 的名字
-  if (names.length === 0) {
-    for (let i = 0; i <= 3; i++) {
-      const el = document.getElementById(`name${i}`);
-      if (el && el.value.trim()) names.push(el.value.trim());
-    }
-  }
-  // 再退回用 players 物件（等待室名字）
-  if (names.length === 0) {
-    const players = Object.values(game.players || {});
-    names = players.map(p => p.name.split(' ')[0]);
-  }
-  document.getElementById('mpBarPlayers').textContent = names.join('、');
-}
+// ── LEAVE ────────────────────────────────────────────────
+window.mpLeave = async () => {
+  if (mpGameListener) { off(ref(db, `games/${mpGameId}`)); mpGameListener = null; }
+  document.removeEventListener('input', mpHostOnChange, true);
+  document.removeEventListener('change', mpHostOnChange, true);
+  document.removeEventListener('input', mpGuestOnScoreChange, true);
+  document.removeEventListener('change', mpGuestOnScoreChange, true);
 
-// ── FILL PLAYERS FROM LOBBY ───────────────────────────────
-function mpFillPlayersFromLobby(game) {
-  // 暫停同步，避免清空動作被當成狀態同步出去
-  mpIsApplyingRemote = true;
-
-  const players = Object.entries(game.players || {});
-  // 自己排第一
-  const sorted = [
-    ...players.filter(([uid]) => uid === mpUser.uid),
-    ...players.filter(([uid]) => uid !== mpUser.uid)
-  ];
-
-  if (typeof clearCurrentRoundData === 'function') clearCurrentRoundData(false);
-
-  // 等 DOM 更新完再填名字（name0~name3）
-  setTimeout(() => {
-    sorted.forEach(([uid, p], idx) => {
-      const el = document.getElementById(`name${idx}`);  // 從 0 開始
-      if (el) {
-        el.value = p.name;
-        el.dispatchEvent(new Event('input', { bubbles: true }));
-      }
-    });
-    if (typeof updateNames === 'function') updateNames(true);
-    // 填完名字後額外觸發讓洞記憶帶入（等模式設定也穩定）
-    setTimeout(() => {
-      if (typeof applyHdcpMemoryAndNotify === 'function') applyHdcpMemoryAndNotify();
-      // 帶入後再同步一次確保狀態最新
-      setTimeout(() => {
-        if (!mpIsApplyingRemote && mpGameId && typeof collectAppState === 'function') {
-          const state = collectAppState();
-          update(ref(db, `games/${mpGameId}`), { state }).catch(()=>{});
-        }
-      }, 200);
-    }, 1000);
-    // 填完名字後恢復同步
-    setTimeout(() => { mpIsApplyingRemote = false; }, 1400);
-  }, 500);
-}
-
-// ── FILL LATE JOINING PLAYER ─────────────────────────────
-function mpFillLatePlayer(game, prevPlayerCount) {
-  // 有新玩家中途加入，寫入 Firebase fields，讓所有人同步
-  const players = Object.entries(game.players || {});
-
-  // 取得目前 Firebase fields 已有的名字
-  const filledNames = [];
-  for (let i = 0; i < 4; i++) {
-    const el = document.getElementById(`name${i}`);
-    if (el && el.value.trim()) filledNames.push(el.value.trim());
-  }
-
-  // 找出還沒有對應欄位的新玩家，寫入下一個空白位置
-  const newPlayers = players.filter(([uid, p]) => !filledNames.includes(p.name));
-  if (newPlayers.length === 0) return;
-
-  let newIdx = 0;
-  for (let i = 0; i < 4 && newIdx < newPlayers.length; i++) {
-    const el = document.getElementById(`name${i}`);
-    if (el && !el.value.trim()) {
-      const name = newPlayers[newIdx][1].name;
-      // 直接寫入 Firebase，讓所有人同步
-      if (mpGameId) mpWriteField(`name${i}`, name);
-      newIdx++;
-    }
-  }
-}
-
-// ── FIELD-LEVEL SYNC ─────────────────────────────────────
-// 每個欄位獨立同步，不收集整個 DOM
-
-// 欄位 ID → Firebase key 的對應
-const MP_FIELD_MAP = {
-  'savedCourseSelect': 'savedCourse',
-  'startHole': 'startHole',
-  'pointVal': 'pointVal',
-  'mB': 'mB', 'mE4': 'mE4', 'mE5': 'mE5', 'mHIO': 'mHIO',
-  'modeVegas': 'modeVegas', 'extMode': 'extMode',
-  'modeMatch': 'modeMatch', 'modePar': 'modePar',
-  'name0': 'name0', 'name1': 'name1', 'name2': 'name2', 'name3': 'name3',
-  'p0_m': 'p0_m', 'p1_m': 'p1_m', 'p2_m': 'p2_m', 'p3_m': 'p3_m',
-  'p0_p': 'p0_p', 'p1_p': 'p1_p', 'p2_p': 'p2_p', 'p3_p': 'p3_p',
-  'vegasRank0': 'vegasRank0', 'vegasRank1': 'vegasRank1',
-  'vegasRank2': 'vegasRank2', 'vegasRank3': 'vegasRank3',
-};
-
-// 動態加入讓洞欄位
-['0_1','0_2','0_3','1_2','1_3','2_3'].forEach(k => {
-  const [a,b] = k.split('_');
-  MP_FIELD_MAP[`pair-strokes-${a}-${b}`] = `pair_val_${k}`;
-  MP_FIELD_MAP[`pair-offset-${a}-${b}`] = `pair_offset_${k}`;
-  MP_FIELD_MAP[`pair-special-p3-${a}-${b}`] = `pair_p3_${k}`;
-  MP_FIELD_MAP[`pair-special-p4-${a}-${b}`] = `pair_p4_${k}`;
-  MP_FIELD_MAP[`pair-special-p5-${a}-${b}`] = `pair_p5_${k}`;
-});
-
-// 動態加入成績欄位
-[0,1,2,3].forEach(i => {
-  for (let h=1; h<=18; h++) {
-    MP_FIELD_MAP[`cell_${i}_${h}`] = `score_${i}_${h}`;
-  }
-});
-
-function mpHookAutoSave() {
-  document.addEventListener('input', mpOnDomChange, true);
-  document.addEventListener('change', mpOnDomChange, true);
-  document.addEventListener('click', mpOnDomChange, true);
-
-  // 直接 patch toggleMainMode，確保比賽模式同步
-  if (typeof toggleMainMode === 'function' && !toggleMainMode._mpPatched) {
-    const _orig = toggleMainMode;
-    window.toggleMainMode = function(id) {
-      _orig(id);
-      if (!mpIsApplyingRemote && mpGameId) {
-        setTimeout(async () => {
-          const val = !!document.getElementById(id)?.checked;
-          await mpWriteField(id, val);
-        }, 30);
-      }
-    };
-    window.toggleMainMode._mpPatched = true;
-  }
-}
-
-async function mpOnDomChange(e) {
-  if (mpIsApplyingRemote) return;
-  if (!mpGameId) return;
-  const id = e.target?.id;
-  if (!id) return;
-
-  // 處理比賽模式 row click（modeRowVegas, modeRowMatch 等）
-  if (id.startsWith('modeRow')) {
-    // 等 toggleMainMode 執行完再讀 checkbox 狀態
-    setTimeout(async () => {
-      const modeMap = {
-        'modeRowVegas': 'modeVegas',
-        'modeRowExt': 'extMode',
-        'modeRowMatch': 'modeMatch',
-        'modeRowPar': 'modePar'
-      };
-      const checkId = modeMap[id];
-      if (!checkId) return;
-      const val = !!document.getElementById(checkId)?.checked;
-      await mpWriteField(checkId, val);
-    }, 50);
-    return;
-  }
-
-  // 處理讓洞配對 toggle（pair-toggle-a-b）
-  if (id.startsWith('pair-toggle-')) {
-    const parts = id.split('-');
-    const a = parts[2], b = parts[3];
-    const key = `${a}_${b}`;
-    const checked = !!document.getElementById(`pair-check-${a}-${b}`)?.checked;
-    await mpWriteField(`pair_checked_${key}`, checked);
-    return;
-  }
-
-  // 處理讓洞 mode（pair-mode-a-b）
-  if (id.startsWith('pair-mode-')) {
-    const parts = id.split('-');
-    const a = parts[2], b = parts[3];
-    const key = `${a}_${b}`;
-    const val = document.getElementById(id)?.value || 'general';
-    await mpWriteField(`pair_mode_${key}`, val);
-    return;
-  }
-
-  const fbKey = MP_FIELD_MAP[id];
-  if (!fbKey) return;
-
-  const el = e.target;
-  const val = el.type === 'checkbox' ? el.checked : el.value;
-  await mpWriteField(fbKey, val);
-}
-
-async function mpWriteField(key, val) {
-  if (!mpGameId) return;
-  try {
-    await update(ref(db, `games/${mpGameId}/fields`), { [key]: val });
-  } catch(e) {
-    console.error('mpWriteField error', key, e);
-  }
-}
-
-// mpSyncTimer 保留但不再使用（留給 mpScheduleSync 相容性）
-function mpScheduleSync() {}
-
-// ── FORCE LEAVE (球局被刪除時) ───────────────────────────
-function mpForceLeave() {
-  if (mpGameListener) { off(ref(db, `games/${mpGameId}/players`)); mpGameListener = null; }
-  if (window._mpFieldsListener) { off(ref(db, `games/${window._mpFieldsListener.code}/fields`)); window._mpFieldsListener = null; }
-  mpGameId = null; mpIsHost = false; mpLastPlayerCount = 0;
-  document.getElementById('mp-bar').classList.remove('show');
-  document.body.classList.remove('mp-active');
-  document.getElementById('mp-overlay').classList.remove('hide');
-  document.removeEventListener('input', mpOnDomChange, true);
-  document.removeEventListener('change', mpOnDomChange, true);
-  document.removeEventListener('click', mpOnDomChange, true);
-  mpShowScreen('home');
-}
-
-// ── LEAVE GAME ───────────────────────────────────────────
-window.mpLeaveGame = async () => {
   const gameId = mpGameId;
-  const isHost = mpIsHost;
-  if (mpGameListener) { off(ref(db, `games/${gameId}/players`)); mpGameListener = null; }
-  if (window._mpFieldsListener) { off(ref(db, `games/${window._mpFieldsListener.code}/fields`)); window._mpFieldsListener = null; }
-  mpGameId = null; mpIsHost = false; mpLastPlayerCount = 0;
+  mpGameId = null; mpIsHost = false;
   document.getElementById('mp-bar').classList.remove('show');
-  document.body.classList.remove('mp-active');
+  document.body.classList.remove('host-mode', 'guest-mode');
   document.getElementById('mp-overlay').classList.remove('hide');
-  document.removeEventListener('input', mpOnDomChange, true);
-  document.removeEventListener('change', mpOnDomChange, true);
-  document.removeEventListener('click', mpOnDomChange, true);
-  // 清除 Firebase 球局資料：所有人都只移除自己
-  if (gameId) {
+
+  if (gameId && mpUser) {
     try {
       await remove(ref(db, `games/${gameId}/players/${mpUser.uid}`));
-      // 確認是否還有其他玩家，沒有的話刪整個球局
       const snap = await get(ref(db, `games/${gameId}/players`));
       if (!snap.exists() || Object.keys(snap.val() || {}).length === 0) {
         await remove(ref(db, `games/${gameId}`));
       }
-    } catch(e) { console.error('mpLeaveGame cleanup error', e); }
+    } catch(e) {}
   }
   mpShowScreen('home');
 };
 
-// ── HELPERS ──────────────────────────────────────────────
-// ── COURSES FIREBASE SYNC ────────────────────────────────
-window.mpSyncCoursesToFirebase = async (data) => {
-  try {
-    await update(ref(db, 'shared'), { courses: data });
-  } catch(e) { console.error('mpSyncCourses error', e); }
-};
-
-async function mpLoadCoursesFromFirebase() {
-  try {
-    const snap = await get(ref(db, 'shared'));
-    if (!snap.exists()) return;
-    const shared = snap.val();
-
-    // 載入球場資料
-    if (shared.courses && typeof shared.courses === 'object') {
-      const local = JSON.parse(localStorage.getItem('golfSavedCoursesV21') || '{}');
-      const merged = { ...local, ...shared.courses };
-      localStorage.setItem('golfSavedCoursesV21', JSON.stringify(merged));
-    }
-
-    // 載入讓洞記憶
-    if (shared.hdcpMemory && typeof shared.hdcpMemory === 'object') {
-      const localHdcp = JSON.parse(localStorage.getItem('golfHdcpMemoryV1') || '{}');
-      const mergedHdcp = { ...localHdcp, ...shared.hdcpMemory };
-      localStorage.setItem('golfHdcpMemoryV1', JSON.stringify(mergedHdcp));
-    }
-
-    // 重新渲染球場下拉選單
-    if (typeof refreshSavedCourseSelect === 'function') refreshSavedCourseSelect();
-    else if (typeof initUI === 'function') initUI();
-  } catch(e) { console.error('mpLoadCourses error', e); }
+function mpForceLeave() {
+  if (mpGameListener) { off(ref(db, `games/${mpGameId}`)); mpGameListener = null; }
+  document.removeEventListener('input', mpHostOnChange, true);
+  document.removeEventListener('change', mpHostOnChange, true);
+  document.removeEventListener('input', mpGuestOnScoreChange, true);
+  document.removeEventListener('change', mpGuestOnScoreChange, true);
+  mpGameId = null; mpIsHost = false;
+  document.getElementById('mp-bar').classList.remove('show');
+  document.body.classList.remove('host-mode', 'guest-mode');
+  document.getElementById('mp-overlay').classList.remove('hide');
+  mpShowScreen('home');
 }
 
-// ── HDCP MEMORY FIREBASE SYNC ─────────────────────────────
-window.mpSyncHdcpToFirebase = async (data) => {
-  try {
-    await update(ref(db, 'shared'), { hdcpMemory: data });
-  } catch(e) {}
-};
-
+// ── HELPERS ──────────────────────────────────────────────
 window.mpShowScreen = (name) => {
-  ['login','home','create','join','lobby'].forEach(s => {
+  ['login','home','join','lobby'].forEach(s => {
     const el = document.getElementById(`mp-screen-${s}`);
     if (el) el.style.display = s === name ? 'block' : 'none';
   });
 };
 
-window.mpCopyCode = async () => {
-  const code = document.getElementById('mpLobbyCode').textContent.trim();
-  if (!code || code === '----') return;
-  try {
-    await navigator.clipboard.writeText(code);
-    mpToast('✅ 已複製房間碼：' + code);
-  } catch(e) {
-    // fallback for older browsers
-    const el = document.createElement('input');
-    el.value = code;
-    document.body.appendChild(el);
-    el.select();
-    document.execCommand('copy');
-    document.body.removeChild(el);
-    mpToast('✅ 已複製房間碼：' + code);
-  }
-};
-
 function mpShowError(id, msg) {
   const el = document.getElementById(id);
-  if (!el) return;
-  el.style.display = 'block';
-  el.textContent = msg;
+  if (el) { el.style.display = 'block'; el.textContent = msg; }
+}
+function mpHideError(id) {
+  const el = document.getElementById(id);
+  if (el) el.style.display = 'none';
 }
 
 let mpToastTimer;
 function mpToast(msg) {
   const t = document.getElementById('mp-toast');
-  t.textContent = msg;
-  t.classList.add('show');
+  t.textContent = msg; t.classList.add('show');
   clearTimeout(mpToastTimer);
   mpToastTimer = setTimeout(() => t.classList.remove('show'), 2500);
 }
