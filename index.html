@@ -5367,6 +5367,24 @@ async function mpOnDomChange(e) {
   const id = e.target?.id;
   if (!id) return;
 
+  // 處理比賽模式 row click（modeRowVegas, modeRowMatch 等）
+  if (id.startsWith('modeRow')) {
+    // 等 toggleMainMode 執行完再讀 checkbox 狀態
+    setTimeout(async () => {
+      const modeMap = {
+        'modeRowVegas': 'modeVegas',
+        'modeRowExt': 'extMode',
+        'modeRowMatch': 'modeMatch',
+        'modeRowPar': 'modePar'
+      };
+      const checkId = modeMap[id];
+      if (!checkId) return;
+      const val = !!document.getElementById(checkId)?.checked;
+      await mpWriteField(checkId, val);
+    }, 50);
+    return;
+  }
+
   // 處理讓洞配對 toggle（pair-toggle-a-b）
   if (id.startsWith('pair-toggle-')) {
     const parts = id.split('-');
