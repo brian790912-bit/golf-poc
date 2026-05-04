@@ -354,15 +354,15 @@ select.inp { cursor: pointer; }
 ═══════════════════════════════════════════ */
 #toast {
   position: fixed; bottom: 80px; left: 50%;
-  transform: translateX(-50%) translateY(60px);
+  transform: translateX(-50%) translateY(200px);
   background: var(--green-dark); color: white;
   padding: 11px 22px; border-radius: 24px;
   font-size: 14px; font-weight: 900;
   transition: transform 0.3s ease; z-index: 9999;
   white-space: nowrap; box-shadow: 0 4px 16px rgba(0,0,0,.25);
-  pointer-events: none;
+  pointer-events: none; opacity: 0;
 }
-#toast.show { transform: translateX(-50%) translateY(0); }
+#toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
 
 /* ═══════════════════════════════════════════
    LOGIN PAGE
@@ -693,8 +693,8 @@ select.inp { cursor: pointer; }
     <div class="card" id="modeCard">
       <div class="card-title"><span class="num">3</span> 比賽模式</div>
       <!-- Vegas -->
-      <div class="mode-row on" id="modeRowVegas" onclick="mpToggleMode('Vegas')">
-        <input type="checkbox" id="chkVegas" checked>
+      <div class="mode-row" id="modeRowVegas" onclick="mpToggleMode('Vegas')">
+        <input type="checkbox" id="chkVegas">
         <span class="mode-label">Vegas</span>
       </div>
       <div class="mode-sub" id="vegasSub">
@@ -708,8 +708,8 @@ select.inp { cursor: pointer; }
         </div>
       </div>
       <!-- 比洞賽 -->
-      <div class="mode-row on" id="modeRowMatch" onclick="mpToggleMode('Match')">
-        <input type="checkbox" id="chkMatch" checked>
+      <div class="mode-row" id="modeRowMatch" onclick="mpToggleMode('Match')">
+        <input type="checkbox" id="chkMatch">
         <span class="mode-label">比洞賽</span>
       </div>
       <div class="mode-sub" id="matchSub">
@@ -717,8 +717,8 @@ select.inp { cursor: pointer; }
         <div class="check-grid" id="matchPlayers"></div>
       </div>
       <!-- 抓PAR -->
-      <div class="mode-row on" id="modeRowPar" onclick="mpToggleMode('Par')">
-        <input type="checkbox" id="chkPar" checked>
+      <div class="mode-row" id="modeRowPar" onclick="mpToggleMode('Par')">
+        <input type="checkbox" id="chkPar">
         <span class="mode-label">抓PAR</span>
       </div>
       <div class="mode-sub" id="parSub">
@@ -728,7 +728,7 @@ select.inp { cursor: pointer; }
     </div>
 
     <!-- 讓洞設定 -->
-    <div class="card" id="hdcpCard" style="display:none">
+    <div class="card" id="hdcpCard">
       <div class="card-title"><span class="num">4</span> 讓洞設定</div>
       <div id="hdcpMemArea"></div>
       <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">
@@ -4065,6 +4065,24 @@ onAuthStateChanged(auth, async user => {
     if (el) el.textContent = name + '，您好！';
     try { await getRedirectResult(auth); } catch(e){}
     await mpLoadShared();
+    // 重新整理後恢復房間
+    const savedGameId = sessionStorage.getItem('mpGameId');
+    const savedIsHost = sessionStorage.getItem('mpIsHost') === '1';
+    if (savedGameId) {
+      const snap = await get(ref(db,`games/${savedGameId}`));
+      if (snap.exists()) {
+        const game = snap.val();
+        // 確認還在 players 裡
+        if (game.players?.[mpUser.uid]) {
+          mpGameId = savedGameId; mpIsHost = savedIsHost;
+          if (game.status === 'playing') mpEnterGame(savedGameId, game);
+          else mpEnterLobby(savedGameId);
+          return;
+        }
+      }
+      sessionStorage.removeItem('mpGameId');
+      sessionStorage.removeItem('mpIsHost');
+    }
     showPage('page-home');
   } else {
     mpUser = null;
@@ -4123,6 +4141,8 @@ window.mpCreateGame = async () => {
   });
   mpGameId = code; mpIsHost = true;
   mpSlots = [{name:'',uid:''},{name:'',uid:''},{name:'',uid:''},{name:'',uid:''}];
+  sessionStorage.setItem('mpGameId', code);
+  sessionStorage.setItem('mpIsHost', '1');
   mpEnterLobby(code);
 };
 
@@ -4140,6 +4160,8 @@ window.mpJoinGame = async () => {
     name: mpUser.displayName||'球友', photo: mpUser.photoURL||'', isHost:false, joinedAt:Date.now()
   });
   mpGameId = code; mpIsHost = false;
+  sessionStorage.setItem('mpGameId', code);
+  sessionStorage.setItem('mpIsHost', '0');
   if (game.status === 'playing') mpEnterGame(code, game);
   else mpEnterLobby(code);
 };
@@ -4171,7 +4193,7 @@ function mpEnterLobby(code) {
     // 更新 slots（新加入的人填入空槽）
     players.forEach(([uid,p]) => {
       if (!mpSlots.find(s=>s.uid===uid)) {
-        const empty = mpSlots.findIndex(s=>!s.uid&&!s.name);
+        const empty = mpSlots.findIndex(s=>!s.uid);
         if (empty>=0) mpSlots[empty]={name:p.name,uid,photo:p.photo||''};
       }
     });
@@ -4222,7 +4244,10 @@ function mpRenderSlots() {
            <div style="flex:1;font-size:14px">${s.name}</div>
            ${mpIsHost?`<button onclick="mpClearSlot(${i})" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:4px 8px">✕</button>`:''}`
         : `<input class="inp" style="flex:1;margin:0" placeholder="輸入球友名字"
-             value="${s.name}" oninput="mpSlotName(${i},this.value)"
+             value="${s.name}" id="slotInp${i}"
+             oncompositionend="mpSlotName(${i},this.value)"
+             onblur="mpSlotName(${i},this.value)"
+             onkeyup="if(!event.isComposing)mpSlotName(${i},this.value)"
              ${!mpIsHost?'readonly':''} />`
       }
     </div>`).join('');
@@ -4251,6 +4276,13 @@ function getSlotNames() { return mpSlots.map(s=>s.name?.trim()||''); }
 // ── MODE TOGGLES ──────────────────────────────────────────
 window.mpToggleMode = mode => {
   if (!mpIsHost) return;
+  // Vegas 需要4個玩家
+  if (mode === 'Vegas') {
+    const filledCount = mpSlots.filter(s=>s.name?.trim()).length;
+    if (filledCount < 4 && !document.getElementById('chkVegas')?.checked) {
+      toast('⚠️ Vegas 需要 4 位玩家才能開啟'); return;
+    }
+  }
   const cb=document.getElementById(`chk${mode}`);
   const row=document.getElementById(`modeRow${mode}`);
   const sub=document.getElementById(`${mode.toLowerCase()}Sub`);
@@ -4258,9 +4290,6 @@ window.mpToggleMode = mode => {
   cb.checked=!cb.checked;
   row?.classList.toggle('on',cb.checked);
   if(sub) sub.style.display=cb.checked?'block':'none';
-  // 讓洞設定顯示
-  const hdcpCard=document.getElementById('hdcpCard');
-  if(hdcpCard) hdcpCard.style.display=document.getElementById('chkMatch')?.checked?'block':'none';
   mpUpdateModePlayers();
   mpUpdateHdcp();
   mpLobbySync();
@@ -4309,6 +4338,10 @@ function mpUpdateVegasRanks() {
 }
 
 // ── HDCP PAIRS ────────────────────────────────────────────
+// 讓洞互相連動：A讓B n洞 → B讓A = -n洞
+// 使用 pair key 0_1, 0_2... 存的是「a讓b」的數值
+// 正數表示 a讓b，負數表示 b讓a
+
 function mpUpdateHdcp() {
   const area = document.getElementById('hdcpPairs');
   const memArea = document.getElementById('hdcpMemArea');
@@ -4318,15 +4351,18 @@ function mpUpdateHdcp() {
   const myName = mpUser?.displayName;
   const memItems = [];
   const pairs = [];
+
   for (let a=0;a<4;a++) for (let b=a+1;b<4;b++) {
     if (!names[a]||!names[b]) continue;
     pairs.push({a,b,nA:names[a],nB:names[b]});
-    const key=[names[a],names[b]].sort().join('|');
-    if (hdcpMem[key]) {
-      const m=hdcpMem[key];
+    // 讓洞記憶（兩個玩家都在才顯示）
+    const hk=[names[a],names[b]].sort().join('|');
+    if (hdcpMem[hk] && !memItems.find(m=>m.includes(names[a])&&m.includes(names[b]))) {
+      const m=hdcpMem[hk];
       memItems.push(`${m.date} ${m.course} ｜ ${m.nameA} 讓 ${m.nameB} ${Math.abs(m.newStrokes)} 洞`);
     }
   }
+
   if (memArea) memArea.innerHTML = memItems.length>0 ? `
     <div class="hdcp-badge">
       <div class="hdcp-badge-title">⚠️ 讓洞記錄提醒</div>
@@ -4335,58 +4371,106 @@ function mpUpdateHdcp() {
 
   if (pairs.length===0) { area.innerHTML='<div style="font-size:12px;color:var(--muted)">請先填入玩家名字</div>'; return; }
 
-  area.innerHTML = pairs.map(({a,b,nA,nB}) => {
-    const canEdit = mpIsHost || nA===myName || nB===myName;
-    const key=`${a}_${b}`;
-    const hdcpKey=[nA,nB].sort().join('|');
-    const memVal = hdcpMem[hdcpKey]?.newStrokes ?? '';
-    return `<div class="pair-block">
-      <div class="pair-title">${nA} <span style="color:var(--muted)">vs</span> ${nB}</div>
-      <div class="pair-row">
-        <label class="radio-label">
-          <input type="radio" name="hmode_${key}" id="hGen_${key}" value="general" checked onchange="mpToggleHMode('${key}')" ${!canEdit?'disabled':''}>
-          一般讓法
-        </label>
-        <input class="pair-inp" type="number" id="hVal_${key}" value="${memVal}" placeholder="0" oninput="mpLobbySync()" ${!canEdit?'readonly':''} />
-        <span style="font-size:12px;color:var(--muted)">洞</span>
-      </div>
-      <div class="pair-row">
-        <label class="radio-label">
-          <input type="radio" name="hmode_${key}" id="hSpe_${key}" value="special" onchange="mpToggleHMode('${key}')" ${!canEdit?'disabled':''}>
-          特殊讓法
-        </label>
-      </div>
-      <div id="hSpecArea_${key}" style="display:none;padding-left:8px">
-        <div class="grid-3" style="margin-top:6px">
-          <div class="field"><label>Par3</label><input class="pair-inp" style="width:100%" type="number" id="hP3_${key}" placeholder="0" oninput="mpLobbySync()" ${!canEdit?'readonly':''}></div>
-          <div class="field"><label>Par4</label><input class="pair-inp" style="width:100%" type="number" id="hP4_${key}" placeholder="0" oninput="mpLobbySync()" ${!canEdit?'readonly':''}></div>
-          <div class="field"><label>Par5</label><input class="pair-inp" style="width:100%" type="number" id="hP5_${key}" placeholder="0" oninput="mpLobbySync()" ${!canEdit?'readonly':''}></div>
-        </div>
-      </div>
-      <label class="radio-label" style="margin-top:6px">
-        <input type="checkbox" id="hOff_${key}" onchange="mpLobbySync()" ${!canEdit?'disabled':''} style="width:18px;height:18px;margin-right:6px">
-        倍率折抵
-      </label>
-    </div>`;
-  }).join('');
+  // 每個玩家一個 block，顯示對其他玩家的讓洞
+  const playerBlocks = [];
+  const filledSlots = mpSlots.filter((s,i)=>names[i]);
 
-  // 帶入讓洞記憶
-  pairs.forEach(({a,b,nA,nB}) => {
-    const key=`${a}_${b}`;
-    const hk=[nA,nB].sort().join('|');
-    if (hdcpMem[hk]) {
-      const inp=document.getElementById(`hVal_${key}`);
-      if (inp && !inp.value) inp.value=hdcpMem[hk].newStrokes;
-    }
+  filledSlots.forEach((slotA, ai) => {
+    const a = mpSlots.indexOf(slotA);
+    const nA = names[a];
+    if (!nA) return;
+    const canEditA = mpIsHost || nA === myName;
+
+    let pairRows = '';
+    filledSlots.forEach((slotB, bi) => {
+      const b = mpSlots.indexOf(slotB);
+      if (a === b) return;
+      const nB = names[b];
+      if (!nB) return;
+
+      // key 永遠是小index_大index
+      const key = a<b ? `${a}_${b}` : `${b}_${a}`;
+      const isReverse = a>b; // a是大index，讀取時要取負值
+      const inputId = `hVal_${key}`;
+      const modeId = `hMode_${key}`;
+      const specId = `hSpec_${key}`;
+
+      // 讓洞記憶帶入
+      const hk=[nA,nB].sort().join('|');
+      const memVal = hdcpMem[hk]?.newStrokes ?? '';
+      // 如果記憶裡是 nameA讓nameB，且 nameA===nA，則正數；否則負數
+      let defaultVal = '';
+      if (memVal !== '') {
+        const memNameA = hdcpMem[hk]?.nameA;
+        defaultVal = memNameA === nA ? Math.abs(memVal) : -Math.abs(memVal);
+      }
+
+      pairRows += `
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f0f4ef">
+          <div style="flex:1;font-size:14px;font-weight:700;color:#18311f">讓 ${nB}</div>
+          <div style="display:flex;align-items:center;gap:4px">
+            <input class="pair-inp" type="number"
+              id="hValFor_${a}_${b}"
+              value="${defaultVal}"
+              placeholder="0"
+              oninput="mpHdcpChanged(${a},${b},this.value)"
+              ${!canEditA?'readonly':''}
+              style="width:65px" />
+            <span style="font-size:12px;color:var(--muted)">洞</span>
+          </div>
+        </div>`;
+    });
+
+    playerBlocks.push(`
+      <div style="border:1.5px solid var(--border);border-radius:12px;padding:12px;margin-bottom:8px;background:white">
+        <div style="font-size:14px;font-weight:900;color:var(--green-dark);margin-bottom:4px">${nA}</div>
+        ${pairRows}
+        <div style="margin-top:8px;display:flex;gap:12px;flex-wrap:wrap">
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+            <input type="radio" name="hmode_${a}" id="hGen_${a}" value="general" checked
+              onchange="mpHdcpModeChanged(${a})" ${!canEditA?'disabled':''}>
+            一般讓法
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+            <input type="radio" name="hmode_${a}" id="hSpe_${a}" value="special"
+              onchange="mpHdcpModeChanged(${a})" ${!canEditA?'disabled':''}>
+            特殊讓法
+          </label>
+        </div>
+        <div id="hSpecArea_${a}" style="display:none;margin-top:8px">
+          <div class="grid-3">
+            <div class="field"><label>Par3</label><input class="pair-inp" style="width:100%" type="number" id="hP3_${a}" placeholder="0" oninput="mpLobbySync()" ${!canEditA?'readonly':''}></div>
+            <div class="field"><label>Par4</label><input class="pair-inp" style="width:100%" type="number" id="hP4_${a}" placeholder="0" oninput="mpLobbySync()" ${!canEditA?'readonly':''}></div>
+            <div class="field"><label>Par5</label><input class="pair-inp" style="width:100%" type="number" id="hP5_${a}" placeholder="0" oninput="mpLobbySync()" ${!canEditA?'readonly':''}></div>
+          </div>
+        </div>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;margin-top:8px;cursor:pointer">
+          <input type="checkbox" id="hOff_${a}" onchange="mpLobbySync()" ${!canEditA?'disabled':''} style="width:18px;height:18px">
+          倍率折抵
+        </label>
+      </div>`);
   });
+
+  area.innerHTML = playerBlocks.join('');
 }
 
-window.mpToggleHMode = key => {
-  const isSpec=document.getElementById(`hSpe_${key}`)?.checked;
-  const area=document.getElementById(`hSpecArea_${key}`);
-  if(area) area.style.display=isSpec?'block':'none';
+// A讓B n洞 → 同時更新 B讓A 為 -n洞
+window.mpHdcpChanged = (a, b, val) => {
+  const n = parseFloat(val) || 0;
+  // 反向輸入框
+  const reverseEl = document.getElementById(`hValFor_${b}_${a}`);
+  if (reverseEl) reverseEl.value = n === 0 ? '' : -n;
   mpLobbySync();
 };
+
+window.mpHdcpModeChanged = a => {
+  const isSpec = document.getElementById(`hSpe_${a}`)?.checked;
+  const area = document.getElementById(`hSpecArea_${a}`);
+  if (area) area.style.display = isSpec ? 'block' : 'none';
+  mpLobbySync();
+};
+
+window.mpToggleHMode = key => { mpLobbySync(); };
 
 // ── LOBBY SYNC ────────────────────────────────────────────
 window.mpLobbySync = () => {
@@ -4397,17 +4481,24 @@ window.mpLobbySync = () => {
 
 function mpCollectLobby() {
   const g = id => document.getElementById(id);
+  // 新的讓洞格式：每個玩家各自的設定
   const pairs = {};
-  for (let a=0;a<4;a++) for (let b=a+1;b<4;b++) {
-    const key=`${a}_${b}`;
-    pairs[key]={
-      mode: g(`hSpe_${key}`)?.checked?'special':'general',
-      val: g(`hVal_${key}`)?.value||'',
-      p3: g(`hP3_${key}`)?.value||'',
-      p4: g(`hP4_${key}`)?.value||'',
-      p5: g(`hP5_${key}`)?.value||'',
-      offset: !!g(`hOff_${key}`)?.checked,
-      active: !!(g(`hVal_${key}`)?.value||g(`hP3_${key}`)?.value)
+  for (let a=0;a<4;a++) {
+    for (let b=0;b<4;b++) {
+      if (a===b) continue;
+      const val = g(`hValFor_${a}_${b}`)?.value || '';
+      if (val) pairs[`${a}_${b}`] = parseFloat(val) || 0;
+    }
+  }
+  // 讓洞模式和特殊讓法（每個玩家）
+  const hdcpModes = {};
+  for (let a=0;a<4;a++) {
+    hdcpModes[a] = {
+      mode: g(`hSpe_${a}`)?.checked ? 'special' : 'general',
+      p3: g(`hP3_${a}`)?.value||'',
+      p4: g(`hP4_${a}`)?.value||'',
+      p5: g(`hP5_${a}`)?.value||'',
+      offset: !!g(`hOff_${a}`)?.checked
     };
   }
   return {
@@ -4422,7 +4513,7 @@ function mpCollectLobby() {
     matchPlayers: [0,1,2,3].map(i=>!!g(`chkPlayer_match_${i}`)?.checked),
     parPlayers: [0,1,2,3].map(i=>!!g(`chkPlayer_par_${i}`)?.checked),
     vegasRanks: [0,1,2,3].map(i=>g(`vegRank${i}`)?.value||''),
-    pairs
+    pairs, hdcpModes
   };
 }
 
@@ -4453,14 +4544,19 @@ function mpApplyLobby(s) {
     (s.parPlayers||[]).forEach((v,i)=>{sc(`chkPlayer_par_${i}`,v);document.getElementById(`box_chkPlayer_par_${i}`)?.classList.toggle('on',!!v);});
     (s.vegasRanks||[]).forEach((v,i)=>sv(`vegRank${i}`,v));
     mpUpdateVegasRanks();
-    if(s.pairs)Object.entries(s.pairs).forEach(([key,p])=>{
-      const isSpec=p.mode==='special';
-      sc(`hSpe_${key}`,isSpec); sc(`hGen_${key}`,!isSpec);
-      const specArea=document.getElementById(`hSpecArea_${key}`);
+    // 套用讓洞數值
+    if(s.pairs) Object.entries(s.pairs).forEach(([key,val])=>{
+      const [a,b] = key.split('_');
+      sv(`hValFor_${a}_${b}`, val);
+    });
+    // 套用讓洞模式
+    if(s.hdcpModes) Object.entries(s.hdcpModes).forEach(([a,m])=>{
+      const isSpec = m.mode==='special';
+      sc(`hSpe_${a}`,isSpec); sc(`hGen_${a}`,!isSpec);
+      const specArea=document.getElementById(`hSpecArea_${a}`);
       if(specArea)specArea.style.display=isSpec?'block':'none';
-      sv(`hVal_${key}`,p.val); sv(`hP3_${key}`,p.p3);
-      sv(`hP4_${key}`,p.p4); sv(`hP5_${key}`,p.p5);
-      sc(`hOff_${key}`,p.offset);
+      sv(`hP3_${a}`,m.p3); sv(`hP4_${a}`,m.p4); sv(`hP5_${a}`,m.p5);
+      sc(`hOff_${a}`,m.offset);
     });
     setTimeout(()=>{mpApplying=false;},100);
   },50);
@@ -4683,6 +4779,8 @@ window.mpLeave = async () => {
   document.removeEventListener('change',mpGuestSync,true);
   const gameId=mpGameId;
   mpGameId=null;mpIsHost=false;mpBoundIdx=null;
+  sessionStorage.removeItem('mpGameId');
+  sessionStorage.removeItem('mpIsHost');
   document.getElementById('game-bar').classList.remove('show');
   document.getElementById('gameTabs').classList.remove('show');
   if(gameId&&mpUser){
