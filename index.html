@@ -4182,24 +4182,16 @@ window.mpJoinGame = async () => {
     mpEnterGame(code, game);
   } else {
     mpEnterLobby(code);
-    // 訪客加入等待室後立刻顯示綁定畫面
+    // 訪客加入等待室後立刻顯示綁定畫面（綁定後回等待室）
     if (!mpIsHost) {
-      // 等 lobby onValue 拿到 slots 後再顯示
-      const unsubBind = onValue(ref(db,`games/${code}/lobby/slots`), snap => {
-        off(ref(db,`games/${code}/lobby/slots`), unsubBind);
-        const slots = snap.exists() ? Object.values(snap.val()) : [];
-        // 也包含主持人已手動填入的名字
-        const allSlots = mpSlots.map((s,i) => slots[i] || s);
-        const hasNames = allSlots.some(s => s.name?.trim());
-        if (hasNames) mpShowBind(allSlots);
-      });
-      // 如果 lobby.slots 不存在，用現有的 mpSlots
-      setTimeout(() => {
-        const hasNames = mpSlots.some(s => s.name?.trim());
-        if (hasNames && document.getElementById('page-lobby').classList.contains('active')) {
-          mpShowBind(mpSlots);
-        }
-      }, 1500);
+      setTimeout(async () => {
+        const snap = await get(ref(db,`games/${code}`));
+        if (!snap.exists()) return;
+        const g = snap.val();
+        const slots = g.lobby?.slots || mpSlots;
+        // 綁定後回到等待室
+        mpShowBind(slots, () => showPage('page-lobby'));
+      }, 500);
     }
   }
 };
@@ -4713,25 +4705,22 @@ function mpEnterGame(code, game) {
   if(mpListener){off(ref(db,`games/${mpGameId}`));mpListener=null;}
   document.getElementById('game-bar').classList.add('show');
   document.getElementById('barCode').textContent=code;
-  showPage('page-game');
 
   if(mpIsHost){
     if(game.lobby)mpApply174(game.lobby);
     mpRenderVegasRankBar(game.lobby);
+    showPage('page-game');
     setTimeout(()=>{if(typeof renderScoreboard==='function')renderScoreboard();},300);
     document.addEventListener('input',mpHostSync,true);
     document.addEventListener('change',mpHostSync,true);
   } else {
     if(game.state)mpApplyState(game.state);
     mpRenderVegasRankBar(game.lobby);
-    // 顯示玩家綁定畫面
-    const slots = game.lobby?.slots || [];
-    const hasNames = slots.some(s => s.name?.trim());
-    if (hasNames) {
-      mpShowBind(slots);
-    }
     document.addEventListener('input',mpGuestSync,true);
     document.addEventListener('change',mpGuestSync,true);
+    // 顯示玩家綁定畫面，綁定後才進計分
+    const slots = game.lobby?.slots || [];
+    mpShowBind(slots, () => showPage('page-game'));
   }
 
   mpListener=onValue(ref(db,`games/${code}`),snap=>{
@@ -4849,13 +4838,26 @@ function mpApplyGuestScores(scores){
 }
 
 // ── BIND ──────────────────────────────────────────────────
-function mpShowBind(slots){
-  const names=slots.map(s=>s.name).filter(n=>n?.trim());
-  if(!names.length){showPage('page-game');return;}
-  document.getElementById('bindList').innerHTML=names.map((name,idx)=>`
-    <button class="btn btn-outline" onclick="mpBind(${idx})" style="justify-content:flex-start;gap:12px">
-      <div class="avatar" style="background:var(--green);color:white;flex-shrink:0">${name[0]}</div>
-      ${name}
+let mpAfterBind = null; // 綁定後的回調
+
+function mpShowBind(slots, afterBind){
+  mpAfterBind = afterBind || null;
+  // 過濾：不顯示主持人、已被綁定的玩家
+  const available = slots.map((s,i)=>({...s,i})).filter(s => {
+    if (!s.name?.trim()) return false;
+    if (s.uid === mpUser?.uid) return false; // 自己（主持人）
+    // 已被其他人綁定的跳過（uid 有值且不是自己）
+    if (s.uid && s.uid !== '') return false;
+    return true;
+  });
+  if(!available.length){
+    if(mpAfterBind) mpAfterBind();
+    return;
+  }
+  document.getElementById('bindList').innerHTML=available.map(s=>`
+    <button class="btn btn-outline" onclick="mpBind(${s.i})" style="justify-content:flex-start;gap:12px">
+      <div class="avatar" style="background:var(--green);color:white;flex-shrink:0">${s.name[0]}</div>
+      ${s.name}
     </button>`).join('');
   showPage('page-bind');
 }
@@ -4867,11 +4869,16 @@ window.mpBind = async idx => {
     const el=document.getElementById(`name${idx}`);
     if(el){el.value=mpUser.displayName;el.dispatchEvent(new Event('input',{bubbles:true}));}
   }
-  showPage('page-game');
   toast(`✅ 已綁定為玩家${idx+1}：${mpUser.displayName}`);
+  if(mpAfterBind) { mpAfterBind(); mpAfterBind=null; }
+  else showPage('page-lobby');
 };
 
-window.mpBindSkip=()=>{mpBoundIdx=null;showPage('page-game');};
+window.mpBindSkip=()=>{
+  mpBoundIdx=null;
+  if(mpAfterBind) { mpAfterBind(); mpAfterBind=null; }
+  else showPage('page-lobby');
+};
 
 // ── LEAVE ─────────────────────────────────────────────────
 window.mpLeave = async () => {
