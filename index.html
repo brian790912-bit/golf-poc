@@ -353,16 +353,18 @@ select.inp { cursor: pointer; }
    TOAST
 ═══════════════════════════════════════════ */
 #toast {
-  position: fixed; bottom: 80px; left: 50%;
-  transform: translateX(-50%) translateY(200px);
+  position: fixed; bottom: 24px; left: 50%;
+  transform: translateX(-50%);
   background: var(--green-dark); color: white;
   padding: 11px 22px; border-radius: 24px;
   font-size: 14px; font-weight: 900;
-  transition: transform 0.3s ease, opacity 0.3s ease; z-index: 9999;
+  transition: opacity 0.3s ease; z-index: 9999;
   white-space: nowrap; box-shadow: 0 4px 16px rgba(0,0,0,.25);
   pointer-events: none; opacity: 0; visibility: hidden;
 }
-#toast.show { transform: translateX(-50%) translateY(0); opacity: 1; visibility: visible; }
+#toast.show { opacity: 1; visibility: visible; }
+
+.host-only { display: none; }
 
 /* ═══════════════════════════════════════════
    LOGIN PAGE
@@ -671,7 +673,7 @@ select.inp { cursor: pointer; }
           <label>起始洞</label>
           <input class="inp center" type="number" id="loopStart" value="1" min="1" max="18" oninput="mpLobbySync()" />
         </div>
-        <div style="display:flex;align-items:flex-end;padding-bottom:10px" id="newCourseBtnWrap">
+        <div style="display:flex;align-items:flex-end;padding-bottom:10px" id="newCourseBtnWrap" class="host-only">
           <button class="btn btn-outline btn-sm" onclick="mpNewCourse()" style="width:100%">＋ 新增球場</button>
         </div>
       </div>
@@ -701,10 +703,6 @@ select.inp { cursor: pointer; }
         <div class="mode-row" id="modeRowCarry" onclick="mpToggleMode('Carry')" style="margin-bottom:6px">
           <input type="checkbox" id="chkCarry">
           <span class="mode-label" style="font-size:14px">平手遞延</span>
-        </div>
-        <div style="margin-bottom:8px">
-          <div style="font-size:12px;color:var(--muted);margin-bottom:6px">起始洞名次</div>
-          <div id="vegasRankArea"></div>
         </div>
       </div>
       <!-- 比洞賽 -->
@@ -766,9 +764,16 @@ select.inp { cursor: pointer; }
 
   <!-- 計分 tab -->
   <div id="gameScore" style="padding-bottom:120px">
-    <div style="background:rgba(255,255,255,.96);border-bottom:1px solid var(--border);padding:10px 14px;position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-content:space-between">
-      <div style="font-size:13px;color:var(--muted)" id="scoreCourseLabel">-</div>
-      <button onclick="mpShowCourseEdit()" style="background:none;border:none;color:var(--green);font-size:12px;font-weight:900;cursor:pointer">✏️ 編輯球場</button>
+    <div style="background:rgba(255,255,255,.96);border-bottom:1px solid var(--border);padding:10px 14px;position:sticky;top:0;z-index:50">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+        <div style="font-size:13px;color:var(--muted)" id="scoreCourseLabel">-</div>
+        <button onclick="mpShowCourseEdit()" style="background:none;border:none;color:var(--green);font-size:12px;font-weight:900;cursor:pointer">✏️ 編輯球場</button>
+      </div>
+      <!-- Vegas 名次設定（只有 Vegas 模式才顯示） -->
+      <div id="vegasRankBar" style="display:none">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:4px">Vegas 起始洞名次</div>
+        <div id="vegasRankInputs" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+      </div>
     </div>
     <div style="padding:10px 14px">
       <div class="table-wrapper" id="scoreboardWrap">
@@ -4140,6 +4145,7 @@ window.mpCreateGame = async () => {
     lobby: null
   });
   mpGameId = code; mpIsHost = true;
+  mpBoundIdx = null;
   mpSlots = [{name:'',uid:''},{name:'',uid:''},{name:'',uid:''},{name:'',uid:''}];
   sessionStorage.setItem('mpGameId', code);
   sessionStorage.setItem('mpIsHost', '1');
@@ -4160,10 +4166,35 @@ window.mpJoinGame = async () => {
     name: mpUser.displayName||'球友', photo: mpUser.photoURL||'', isHost:false, joinedAt:Date.now()
   });
   mpGameId = code; mpIsHost = false;
+  // 加入新球局完全重置
+  mpSlots = [{name:'',uid:''},{name:'',uid:''},{name:'',uid:''},{name:'',uid:''}];
+  mpBoundIdx = null;
   sessionStorage.setItem('mpGameId', code);
   sessionStorage.setItem('mpIsHost', '0');
-  if (game.status === 'playing') mpEnterGame(code, game);
-  else mpEnterLobby(code);
+  if (game.status === 'playing') {
+    mpEnterGame(code, game);
+  } else {
+    mpEnterLobby(code);
+    // 訪客加入等待室後立刻顯示綁定畫面
+    if (!mpIsHost) {
+      // 等 lobby onValue 拿到 slots 後再顯示
+      const unsubBind = onValue(ref(db,`games/${code}/lobby/slots`), snap => {
+        off(ref(db,`games/${code}/lobby/slots`), unsubBind);
+        const slots = snap.exists() ? Object.values(snap.val()) : [];
+        // 也包含主持人已手動填入的名字
+        const allSlots = mpSlots.map((s,i) => slots[i] || s);
+        const hasNames = allSlots.some(s => s.name?.trim());
+        if (hasNames) mpShowBind(allSlots);
+      });
+      // 如果 lobby.slots 不存在，用現有的 mpSlots
+      setTimeout(() => {
+        const hasNames = mpSlots.some(s => s.name?.trim());
+        if (hasNames && document.getElementById('page-lobby').classList.contains('active')) {
+          mpShowBind(mpSlots);
+        }
+      }, 1500);
+    }
+  }
 };
 
 // ── LOBBY ─────────────────────────────────────────────────
@@ -4221,7 +4252,12 @@ function mpEnterLobby(code) {
       btn.style.display = mpIsHost ? 'flex' : 'none';
       if (mpIsHost) btn.textContent = `開始計分 ▶（${players.length} 人）`;
     }
-    if (g.status==='playing') mpEnterGame(code, g);
+    if (g.status==='playing') {
+      // 重新讀完整 game 確保有最新 lobby
+      get(ref(db,`games/${code}`)).then(snap => {
+        if (snap.exists()) mpEnterGame(code, snap.val());
+      });
+    }
   });
 }
 
@@ -4239,9 +4275,10 @@ function mpSetHostOnly(isHost) {
     const el = document.getElementById(id);
     if (el) { el.style.opacity=isHost?'':'0.6'; el.style.pointerEvents=isHost?'':'none'; }
   });
-  // 新增球場按鈕只有主持人看得到
-  const btn = document.getElementById('newCourseBtnWrap');
-  if (btn) btn.style.display = isHost ? '' : 'none';
+  // host-only 元素
+  document.querySelectorAll('.host-only').forEach(el => {
+    el.style.display = isHost ? '' : 'none';
+  });
 }
 
 // ── SLOTS ─────────────────────────────────────────────────
@@ -4261,7 +4298,7 @@ function mpRenderSlots() {
            ${mpIsHost?`<button onclick="mpClearSlot(${i})" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:4px 8px">✕</button>`:''}`
         : `<input class="inp" style="flex:1;margin:0" placeholder="輸入球友名字"
              value="${s.name}" id="slotInp${i}"
-             onchange="mpSlotName(${i},this.value)"
+             oninput="mpSlotNameInput(${i},this)"
              onblur="mpSlotName(${i},this.value)"
              ${!mpIsHost?'readonly':''} />`
       }
@@ -4284,6 +4321,11 @@ window.mpDP = (e,i) => {
   mpRenderSlots(); mpLobbySync();
 };
 window.mpClearSlot = i => { mpSlots[i]={name:'',uid:''}; mpRenderSlots(); mpLobbySync(); };
+window.mpSlotNameInput = (i, el) => {
+  if (el.composing) return; // 注音輸入中不觸發
+  mpSlots[i].name = el.value;
+  mpUpdateHdcp(); mpUpdateModePlayers(); mpLobbySync();
+};
 window.mpSlotName = (i,v) => { mpSlots[i].name=v; mpUpdateHdcp(); mpUpdateModePlayers(); mpLobbySync(); };
 
 function getSlotNames() { return mpSlots.map(s=>s.name?.trim()||''); }
@@ -4409,19 +4451,27 @@ function mpUpdateHdcp() {
     myPairs.forEach(({a:pa, b:pb, nA:pnA, nB:pnB}) => {
       const opponent = pa===a ? pb : pa;
       const nOpp = names[opponent];
+      // 訪客只看與自己相關的對手配對
+      if (!mpIsHost && nA !== myName && nOpp !== myName) return;
       // key 永遠小_大，val 是 a讓b 的洞數（正=a讓b，負=b讓a）
       const key = pa<pb ? `${pa}_${pb}` : `${pb}_${pa}`;
       const isReverse = pa>pb ? pa===a : pb===a; // 我是b(大index)
 
-      // 讓洞記憶帶入：正確方向
+      // 讓洞記憶帶入：根據當前玩家是 nameA 或 nameB 轉換方向
       const hk = [nA,nOpp].sort().join('|');
       let memVal = '';
       if (hdcpMem[hk]) {
         const m = hdcpMem[hk];
-        const raw = m.newStrokes; // nameA讓nameB raw
+        // newStrokes > 0：nameA讓nameB；< 0：nameB讓nameA
         // 轉換為「nA讓nOpp」的視角
-        if (m.nameA === nA) memVal = raw; // nameA是我，正數我讓對方
-        else memVal = -raw; // nameB是我，負數=對方讓我 → 我要取正才是「我讓對方」的負值
+        const raw = m.newStrokes;
+        if (m.nameA === nA) {
+          // 我是 nameA：newStrokes 正=我讓對方，負=對方讓我
+          memVal = raw;
+        } else {
+          // 我是 nameB：方向相反
+          memVal = -raw;
+        }
       }
 
       pairsHtml += `
@@ -4660,11 +4710,13 @@ function mpEnterGame(code, game) {
 
   if(mpIsHost){
     if(game.lobby)mpApply174(game.lobby);
+    mpRenderVegasRankBar(game.lobby);
     setTimeout(()=>{if(typeof renderScoreboard==='function')renderScoreboard();},300);
     document.addEventListener('input',mpHostSync,true);
     document.addEventListener('change',mpHostSync,true);
   } else {
     if(game.state)mpApplyState(game.state);
+    mpRenderVegasRankBar(game.lobby);
     // 顯示玩家綁定畫面
     const slots = game.lobby?.slots || [];
     const hasNames = slots.some(s => s.name?.trim());
@@ -4830,6 +4882,16 @@ window.mpLeave = async () => {
   if(gameId&&mpUser){
     try{
       await remove(ref(db,`games/${gameId}/players/${mpUser.uid}`));
+      // 清除 lobby.slots 裡的 uid（但保留名字讓主持人看得到）
+      const lobbySnap = await get(ref(db,`games/${gameId}/lobby/slots`));
+      if (lobbySnap.exists()) {
+        const slots = lobbySnap.val();
+        const updates = {};
+        Object.entries(slots).forEach(([i, s]) => {
+          if (s.uid === mpUser.uid) updates[`games/${gameId}/lobby/slots/${i}/uid`] = '';
+        });
+        if (Object.keys(updates).length > 0) await update(ref(db), updates);
+      }
       const snap=await get(ref(db,`games/${gameId}/players`));
       if(!snap.exists()||Object.keys(snap.val()||{}).length===0)await remove(ref(db,`games/${gameId}`));
     }catch(e){}
