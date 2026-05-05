@@ -777,7 +777,14 @@ select.inp { cursor: pointer; }
     </div>
     <div style="padding:10px 14px">
       <div class="table-wrapper" id="scoreboardWrap">
-        <table class="score-table" id="scoreboard"></table>
+        <table class="score-table" id="scoreboard">
+          <thead>
+            <tr id="rowH"></tr>
+            <tr id="rowP"></tr>
+            <tr id="rowHd"></tr>
+          </thead>
+          <tbody id="score-body"></tbody>
+        </table>
       </div>
     </div>
     <div id="scoringWarning" class="warn-box" style="margin:0 14px 10px"></div>
@@ -4487,8 +4494,8 @@ function mpUpdateHdcp() {
             <span>倍率折抵</span>
           </div>
           <div style="display:flex;gap:0;margin-bottom:4px">
-            <div class="pair-mode-chip active" id="hGenChip_${a}" onclick="mpSetHMode(${a},'general')" style="flex:1;text-align:center;padding:8px;border-radius:10px 0 0 10px;border:2px solid var(--green);background:var(--green-light);color:var(--green-dark);font-size:13px;font-weight:900;cursor:pointer">一般讓法</div>
-            <div class="pair-mode-chip" id="hSpeChip_${a}" onclick="mpSetHMode(${a},'special')" style="flex:1;text-align:center;padding:8px;border-radius:0 10px 10px 0;border:2px solid var(--border);border-left:none;font-size:13px;font-weight:900;cursor:pointer">特殊讓法</div>
+            <div class="pair-mode-chip active" id="hGenChip_p${a}" onclick="mpSetHMode(${a},'general')" style="flex:1;text-align:center;padding:8px;border-radius:10px 0 0 10px;border:2px solid var(--green);background:var(--green-light);color:var(--green-dark);font-size:13px;font-weight:900;cursor:pointer">一般讓法</div>
+            <div class="pair-mode-chip" id="hSpeChip_p${a}" onclick="mpSetHMode(${a},'special')" style="flex:1;text-align:center;padding:8px;border-radius:0 10px 10px 0;border:2px solid var(--border);border-left:none;font-size:13px;font-weight:900;cursor:pointer">特殊讓法</div>
           </div>
           <div id="hGenArea_${a}" style="margin-bottom:4px">
             <input class="inp center" type="number" id="hVal_${a}_${opponent}"
@@ -4532,10 +4539,10 @@ window.mpSetHMode = (playerIdx, mode) => {
   const names = getSlotNames();
   const canEdit = mpIsHost || names[playerIdx] === mpUser?.displayName;
   if (!canEdit) return;
-  const genChip = document.getElementById(`hGenChip_${playerIdx}`);
-  const speChip = document.getElementById(`hSpeChip_${playerIdx}`);
-  const genArea = document.getElementById(`hGenArea_${playerIdx}`);
-  const speArea = document.getElementById(`hSpeArea_${playerIdx}`);
+  const genChip = document.getElementById(`hGenChip_p${playerIdx}`);
+  const speChip = document.getElementById(`hSpeChip_p${playerIdx}`);
+  const genArea = document.getElementById(`hGenArea_p${playerIdx}`);
+  const speArea = document.getElementById(`hSpeArea_p${playerIdx}`);
   if (mode==='general') {
     genChip?.setAttribute('style', genChip.getAttribute('style').replace('var(--border)','var(--green)').replace('background:white','background:var(--green-light)'));
     if(genChip){genChip.style.borderColor='var(--green)';genChip.style.background='var(--green-light)';genChip.style.color='var(--green-dark)';}
