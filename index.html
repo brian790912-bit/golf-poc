@@ -1,444 +1,481 @@
 <!DOCTYPE html>
+
 <html lang="zh-TW">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Golf Score</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
-<style>
-/* ═══════════════════════════════════════════
-   RESET & BASE
-═══════════════════════════════════════════ */
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-:root {
-  --green: #2f6b3f;
-  --green-dark: #1e4d2b;
-  --green-light: #dfeedd;
-  --green-soft: #eef4ec;
-  --gold: #c6a15b;
-  --border: #d6e2d3;
-  --text: #18311f;
-  --muted: #7c8879;
-  --white: #ffffff;
-  --bg: #f4f8f2;
-  --warn-bg: #fff8e6;
-  --warn-border: #f0c060;
-  --warn-text: #5a4200;
-  --radius: 14px;
-  --shadow: 0 2px 12px rgba(24,49,31,.08);
-}
-html { font-size: 16px; }
-body {
-  font-family: "Noto Sans TC", sans-serif;
-  background: var(--bg);
-  color: var(--text);
-  font-weight: 700;
-  min-height: 100vh;
-  overflow-x: hidden;
-}
-input, select, button, textarea {
-  font-family: inherit;
-  font-weight: 700;
-  -webkit-appearance: none;
-  appearance: none;
-}
-input::-webkit-outer-spin-button,
-input::-webkit-inner-spin-button { -webkit-appearance: none; }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Golf Score</title>
+  <meta name="theme-color" content="#2f6b3f" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Golf Score" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
+  <style>
+    :root {
+      --primary: #2f6b3f;
+      --primary-dark: #1e4d2b;
+      --primary-soft: #dfeedd;
+      --accent: #c6a15b;
+      --sand: #f3eee2;
+      --bg: #eef4ec;
+      --card: #ffffff;
+      --border: #d6e2d3;
+      --birdie: #c33232;
+      --bogey: #2f2f2f;
+      --muted: #7c8879;
+      --warn: #a72828;
+      --text: #18311f;
+    }
+    * { box-sizing: border-box; }
+    /* ── 玩家拖曳排序 ── */
+    .name-card-wrap {
+      position: relative;
+      touch-action: none;
+    }
+    .name-card-wrap.dragging {
+      opacity: 0.5;
+    }
+    .drag-handle {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      min-height: 48px;
+      cursor: grab;
+      color: #a0b09a;
+      font-size: 1.2rem;
+      flex-shrink: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .drag-handle:active { cursor: grabbing; }
+    .name-card-drop-indicator {
+      height: 3px;
+      background: #2f6b3f;
+      border-radius: 2px;
+      display: none;
+      margin: 2px 0;
+    }
+    .name-card-drop-indicator.show { display: block; }
 
-/* ═══════════════════════════════════════════
-   PAGES (SPA routing)
-═══════════════════════════════════════════ */
-.page { display: none; min-height: 100vh; }
-.page.active { display: block; }
+    button { -webkit-appearance: none; appearance: none; }
+    /* ── 讓洞記憶提醒 ── */
+    .hdcp-memory-toast {
+      background: #fff8e6;
+      border: 2px solid #f0c060;
+      border-radius: 14px;
+      padding: 12px 14px;
+      margin-bottom: 10px;
+      font-size: .88rem;
+      line-height: 1.6;
+      color: #5a4200;
+    }
+    .hdcp-memory-toast .hdcp-toast-title {
+      font-size: .9rem;
+      font-weight: 900;
+      color: #7a5800;
+      margin-bottom: 4px;
+    }
+    .hdcp-memory-toast .hdcp-toast-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px 0;
+      border-bottom: 1px solid #f0e0a0;
+    }
+    .hdcp-memory-toast .hdcp-toast-row:last-child { border-bottom: none; }
 
-/* ═══════════════════════════════════════════
-   TOPBAR
-═══════════════════════════════════════════ */
-.topbar {
-  background: rgba(255,255,255,.96);
-  border-bottom: 1px solid var(--border);
-  padding: 0 16px;
-  height: 52px;
-  display: flex; align-items: center; justify-content: space-between;
-  position: sticky; top: 0; z-index: 100;
-  backdrop-filter: blur(10px);
-  box-shadow: 0 2px 8px rgba(24,49,31,.06);
-}
-.topbar-title {
-  font-size: 16px; font-weight: 900; color: var(--green-dark);
-  display: flex; align-items: center; gap: 8px;
-}
-.topbar-action {
-  background: none; border: none; cursor: pointer;
-  color: var(--green); font-size: 13px; font-weight: 900;
-  padding: 8px 4px;
-}
+    body {
+      font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+      background: linear-gradient(180deg, #f4f8f2 0%, #eef4ec 100%);
+      margin: 0;
+      padding-bottom: 34px;
+      font-weight: 700;
+      color: #18311f;
+      letter-spacing: .01em;
+    }
+    input::-webkit-outer-spin-button,
+    input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    .tab-nav {
+      display: flex;
+      align-items: stretch;
+      background: rgba(255,255,255,.96);
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid rgba(47,107,63,.08);
+      box-shadow: 0 4px 18px rgba(18,45,26,.08);
+    }
+    .tab-btn-group {
+      flex: 1;
+      display: flex;
+      min-width: 0;
+    }
+    .mobile-version-badge {
+      display: none;
+    }
+    .tab-btn {
+      flex: 1;
+      padding: 18px 8px;
+      border: none;
+      background: none;
+      font-size: 1.08rem;
+      font-weight: 900;
+      color: #6f7a6f;
+      border-bottom: 4px solid transparent;
+      cursor: pointer;
+      transition: .18s ease;
+    }
+    .tab-btn.active { color: #1e4d2b; border-bottom: 4px solid #2f6b3f; background: linear-gradient(180deg, rgba(47,107,63,.03), rgba(47,107,63,.01)); }
 
-/* ═══════════════════════════════════════════
-   BOTTOM TABS
-═══════════════════════════════════════════ */
-.bottom-tabs {
-  position: fixed; bottom: 0; left: 0; right: 0;
-  background: rgba(255,255,255,.97);
-  border-top: 1px solid var(--border);
-  display: none; /* hidden until in-game */
-  grid-template-columns: 1fr 1fr;
-  z-index: 100;
-  box-shadow: 0 -2px 12px rgba(24,49,31,.08);
-}
-.bottom-tabs.show { display: grid; }
-.tab-btn {
-  padding: 10px 8px 12px;
-  border: none; background: none; cursor: pointer;
-  color: var(--muted); font-size: 11px; font-weight: 900;
-  display: flex; flex-direction: column; align-items: center; gap: 3px;
-  transition: color 0.15s;
-}
-.tab-btn .icon { font-size: 22px; }
-.tab-btn.active { color: var(--green); }
-.tab-btn.active::after {
-  content: '';
-  position: absolute;
-  bottom: 0; left: 10%; right: 10%;
-  height: 3px; background: var(--green); border-radius: 2px;
-}
-.tab-btn { position: relative; }
+    /* ── 設定引導進度條 ── */
+    .setup-guide-bar {
+      position: sticky;
+      top: 57px;
+      z-index: 999;
+      background: rgba(255,255,255,.97);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid rgba(47,107,63,.10);
+      padding: 8px 12px;
+      display: none;
+    }
+    .setup-guide-bar.show { display: block; }
+    .setup-guide-steps {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+    .setup-guide-steps::-webkit-scrollbar { display: none; }
+    .setup-step {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      flex-shrink: 0;
+    }
+    .setup-step-btn {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      background: none;
+      border: none;
+      padding: 4px 2px;
+      cursor: default;
+      font-family: inherit;
+    }
+    .setup-step-btn.clickable { cursor: pointer; }
+    .setup-step-icon {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #e0e8de;
+      color: #8a9e87;
+      font-size: .72rem;
+      font-weight: 900;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: background .2s, color .2s;
+    }
+    .setup-step-icon.done {
+      background: #2f6b3f;
+      color: #fff;
+    }
+    .setup-step-label {
+      font-size: .78rem;
+      font-weight: 900;
+      color: #8a9e87;
+      white-space: nowrap;
+      transition: color .2s;
+    }
+    .setup-step-label.done { color: #1e4d2b; }
+    .setup-step-label.cta { color: #1e4d2b; text-decoration: underline; }
+    .setup-arrow {
+      font-size: .72rem;
+      color: #c0cbbe;
+      margin: 0 4px;
+      flex-shrink: 0;
+    }
 
-/* ═══════════════════════════════════════════
-   SCROLL CONTAINER
-═══════════════════════════════════════════ */
-.scroll-area {
-  padding: 14px 14px 80px;
-  max-width: 560px; margin: 0 auto;
-}
-
-/* ═══════════════════════════════════════════
-   CARDS
-═══════════════════════════════════════════ */
-.card {
-  background: var(--white);
-  border-radius: var(--radius);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow);
-  padding: 16px;
-  margin-bottom: 12px;
-}
-.card-title {
-  font-size: 13px; font-weight: 900; color: var(--green-dark);
-  margin-bottom: 12px;
-  display: flex; align-items: center; gap: 8px;
-}
-.card-title .num {
-  width: 22px; height: 22px; border-radius: 50%;
-  background: var(--green); color: white;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 11px; flex-shrink: 0;
-}
-
-/* ═══════════════════════════════════════════
-   FORM ELEMENTS
-═══════════════════════════════════════════ */
-.field { margin-bottom: 10px; }
-.field label {
-  display: block; font-size: 12px; color: var(--muted);
-  margin-bottom: 4px;
-}
-.inp {
-  width: 100%; padding: 11px 14px;
-  border: 2px solid var(--border); border-radius: 10px;
-  font-size: 15px; font-weight: 700; color: var(--text);
-  background: white; outline: none;
-  transition: border-color 0.15s;
-}
-.inp:focus { border-color: var(--green); }
-.inp.center { text-align: center; }
-.inp.code {
-  font-family: monospace; font-size: 2rem;
-  letter-spacing: 10px; text-align: center; text-transform: uppercase;
-}
-select.inp { cursor: pointer; }
-.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
-
-/* ═══════════════════════════════════════════
-   BUTTONS
-═══════════════════════════════════════════ */
-.btn {
-  width: 100%; min-height: 50px;
-  border: none; border-radius: 12px;
-  font-size: 15px; font-weight: 900; cursor: pointer;
-  display: flex; align-items: center; justify-content: center; gap: 8px;
-  transition: opacity 0.15s, transform 0.1s;
-  margin-bottom: 8px;
-}
-.btn:active { opacity: 0.85; transform: scale(0.98); }
-.btn-primary {
-  background: linear-gradient(180deg, #2f6b3f, #1e4d2b);
-  color: white;
-  box-shadow: 0 4px 14px rgba(24,49,31,.15);
-}
-.btn-secondary {
-  background: linear-gradient(180deg, #4a8f5f, #2f6b3f);
-  color: white;
-}
-.btn-outline {
-  background: white; color: var(--green);
-  border: 2px solid var(--green);
-}
-.btn-ghost {
-  background: none; color: var(--muted);
-  font-size: 13px; min-height: 36px; border: none;
-}
-.btn-google {
-  background: white; color: #333;
-  border: 2px solid var(--border);
-}
-.btn-sm {
-  min-height: 40px; font-size: 13px;
-  padding: 0 14px; width: auto; border-radius: 8px;
-}
-.btn-danger { background: #c0392b; color: white; }
-
-/* ═══════════════════════════════════════════
-   MODE ROWS (比賽模式)
-═══════════════════════════════════════════ */
-.mode-row {
-  display: flex; align-items: center; gap: 10px;
-  border: 2px solid var(--border); border-radius: 12px;
-  padding: 0 14px; min-height: 48px;
-  cursor: pointer; background: white;
-  margin-bottom: 6px; transition: all 0.15s;
-  user-select: none;
-}
-.mode-row.on { background: var(--green-light); border-color: var(--green); color: var(--green-dark); }
-.mode-row.disabled { opacity: 0.45; pointer-events: none; }
-.mode-row input[type=checkbox] { width: 20px; height: 20px; pointer-events: none; flex-shrink: 0; }
-.mode-label { flex: 1; font-size: 15px; font-weight: 900; }
-.mode-sub { padding-left: 14px; margin-bottom: 6px; }
-
-/* ═══════════════════════════════════════════
-   CHECK ITEMS (參與玩家)
-═══════════════════════════════════════════ */
-.check-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
-.check-item {
-  border: 2px solid var(--border); border-radius: 10px;
-  padding: 10px 8px; display: flex; align-items: center;
-  justify-content: center; font-size: 14px; font-weight: 900;
-  cursor: pointer; min-height: 44px;
-  background: white; transition: all 0.15s; user-select: none;
-}
-.check-item.on { background: var(--green-light); border-color: var(--green); color: var(--green-dark); }
-.check-item input[type=checkbox] { width: 18px; height: 18px; margin-right: 6px; pointer-events: none; }
-
-/* ═══════════════════════════════════════════
-   ROOM CODE
-═══════════════════════════════════════════ */
-.room-code-box {
-  background: var(--green-dark); color: var(--gold);
-  font-family: monospace; font-size: 2.5rem; font-weight: 700;
-  text-align: center; letter-spacing: 12px;
-  padding: 16px; border-radius: 12px;
-  cursor: pointer; user-select: none; margin-bottom: 8px;
-}
-.copy-btn {
-  width: 100%; background: rgba(198,161,91,.12);
-  border: 1.5px solid rgba(198,161,91,.4); color: #9a7830;
-  border-radius: 10px; padding: 9px; font-size: 13px; font-weight: 900;
-  cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;
-  margin-bottom: 4px;
-}
-
-/* ═══════════════════════════════════════════
-   PLAYER LIST
-═══════════════════════════════════════════ */
-.player-row {
-  display: flex; align-items: center; gap: 10px;
-  padding: 9px 0; border-bottom: 1px solid var(--green-soft);
-}
-.player-row:last-child { border-bottom: none; }
-.avatar {
-  width: 36px; height: 36px; border-radius: 50%;
-  background: var(--green); color: white;
-  display: flex; align-items: center; justify-content: center;
-  font-weight: 900; font-size: 14px; flex-shrink: 0; overflow: hidden;
-}
-.avatar img { width: 100%; height: 100%; object-fit: cover; }
-.badge {
-  font-size: 11px; padding: 2px 8px; border-radius: 20px;
-  font-weight: 900; flex-shrink: 0;
-}
-.badge-host { background: var(--gold); color: var(--green-dark); }
-.badge-you { background: var(--green); color: white; }
-
-/* ═══════════════════════════════════════════
-   SLOTS (玩家順序)
-═══════════════════════════════════════════ */
-.slot-row {
-  display: flex; align-items: center; gap: 8px;
-  padding: 8px 0; border-bottom: 1px solid var(--green-soft);
-  transition: opacity 0.15s;
-}
-.slot-row:last-child { border-bottom: none; }
-.slot-row.dragging { opacity: 0.4; }
-.drag-handle {
-  color: #a0b09a; font-size: 18px; cursor: grab;
-  padding: 0 4px; user-select: none; flex-shrink: 0;
-  touch-action: none;
-}
-.drag-handle:active { cursor: grabbing; }
-.slot-num {
-  font-size: 12px; color: var(--muted); font-weight: 900;
-  width: 40px; text-align: center; flex-shrink: 0;
-}
-.drop-zone {
-  height: 3px; background: var(--green);
-  border-radius: 2px; display: none; margin: 1px 0;
-}
-.drop-zone.show { display: block; }
-
-/* ═══════════════════════════════════════════
-   HDCP PAIR BLOCK
-═══════════════════════════════════════════ */
-.pair-block {
-  border: 1.5px solid var(--border); border-radius: 12px;
-  padding: 12px; margin-bottom: 8px; background: white;
-}
-.pair-title {
-  font-size: 13px; font-weight: 900; color: var(--green-dark);
-  margin-bottom: 10px;
-}
-.pair-row {
-  display: flex; align-items: center; gap: 8px;
-  margin-bottom: 6px; font-size: 13px;
-}
-.pair-inp {
-  width: 70px; padding: 7px 8px; border: 2px solid var(--border);
-  border-radius: 8px; font-size: 14px; font-weight: 700;
-  text-align: center; outline: none; background: white; color: var(--text);
-}
-.pair-inp:focus { border-color: var(--green); }
-.radio-label {
-  display: flex; align-items: center; gap: 6px;
-  cursor: pointer; font-size: 13px; font-weight: 700;
-}
-
-/* ═══════════════════════════════════════════
-   HDCP MEMORY BADGE
-═══════════════════════════════════════════ */
-.hdcp-badge {
-  background: var(--warn-bg); border: 1.5px solid var(--warn-border);
-  border-radius: 12px; padding: 10px 14px; margin-bottom: 10px;
-  font-size: 12px; color: var(--warn-text); line-height: 1.6;
-}
-.hdcp-badge-title { font-weight: 900; font-size: 13px; margin-bottom: 4px; color: #7a5800; }
-
-/* ═══════════════════════════════════════════
-   WARNING / ERROR
-═══════════════════════════════════════════ */
-.warn-box {
-  background: var(--warn-bg); border: 1.5px solid var(--warn-border);
-  border-radius: 10px; padding: 10px 14px;
-  font-size: 13px; color: var(--warn-text);
-  margin-bottom: 8px; display: none;
-}
-.err-box {
-  background: #fee2e2; border: 1.5px solid #f87171;
-  border-radius: 10px; padding: 10px 14px;
-  font-size: 13px; color: #b91c1c;
-  margin-bottom: 8px; display: none;
-}
-
-/* ═══════════════════════════════════════════
-   TOAST
-═══════════════════════════════════════════ */
-#toast {
-  position: fixed; bottom: 24px; left: 50%;
-  transform: translateX(-50%);
-  background: var(--green-dark); color: white;
-  padding: 11px 22px; border-radius: 24px;
-  font-size: 14px; font-weight: 900;
-  transition: opacity 0.3s ease; z-index: 9999;
-  white-space: nowrap; box-shadow: 0 4px 16px rgba(0,0,0,.25);
-  pointer-events: none; opacity: 0; visibility: hidden;
-}
-#toast.show { opacity: 1; visibility: visible; }
-
-.host-only { display: none; }
-
-/* ═══════════════════════════════════════════
-   LOGIN PAGE
-═══════════════════════════════════════════ */
-.login-hero {
-  text-align: center; padding: 60px 24px 32px;
-}
-.login-hero .logo { font-size: 64px; margin-bottom: 12px; }
-.login-hero h1 { font-size: 28px; color: var(--green-dark); margin-bottom: 6px; }
-.login-hero p { font-size: 14px; color: var(--muted); }
-.login-form { padding: 0 20px 40px; max-width: 400px; margin: 0 auto; }
-.divider {
-  display: flex; align-items: center; gap: 10px;
-  color: var(--muted); font-size: 12px; margin: 12px 0;
-}
-.divider::before,.divider::after { content:''; flex:1; height:1px; background:var(--border); }
-
-/* ═══════════════════════════════════════════
-   SCORING TAB (hidden DOM from 1.74)
-═══════════════════════════════════════════ */
-/* 保留 1.74 的計分相關 CSS */
-.table-wrapper { overflow: auto; -webkit-overflow-scrolling: touch; background: white; border-radius: 14px; border: 1px solid var(--border); box-shadow: inset 0 1px 0 rgba(255,255,255,.8); }
-.score-table { border-collapse: collapse; min-width: 100%; font-size: .92rem; }
-.score-table th { background: var(--green-dark); color: white; padding: 8px 6px; font-size: .8rem; font-weight: 900; white-space: nowrap; }
-.score-table td { padding: 4px 3px; text-align: center; border-bottom: 1px solid #e8f0e6; }
-.score-table tr:last-child td { border-bottom: none; }
-.score-table .par-row td { background: #f0f8f1; font-size: .78rem; color: var(--green); font-weight: 900; }
-.cell-input {
-  width: 38px; height: 32px; border: 1.5px solid var(--border);
-  border-radius: 6px; text-align: center; font-size: 14px; font-weight: 700;
-  background: white; outline: none; padding: 0;
-  transition: border-color 0.15s;
-}
-.cell-input:focus { border-color: var(--green); }
-/* 成績標記 */
-.mark-hio { outline: 2px solid #c6a15b !important; background: #fff8e6 !important; }
-.mark-eagle { outline: 2px solid #c33232 !important; border-radius: 50% !important; }
-.mark-birdie { outline: 2px solid #c33232 !important; }
-.mark-bogey { outline: 2px solid #2f2f2f !important; }
-.mark-double { outline: 2px solid #2f2f2f !important; border-radius: 50% !important; }
-
-/* ═══════════════════════════════════════════
-   RESULT / SUMMARY
-═══════════════════════════════════════════ */
-.summary-table { width: 100%; border-collapse: collapse; font-size: .9rem; }
-.summary-table th { background: var(--green-dark); color: white; padding: 8px 10px; font-size: .82rem; }
-.summary-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); }
-.summary-table tbody tr:nth-child(even) td { background: #f3f7f1; }
-.summary-section { margin-bottom: 14px; }
-.summary-section h3 { font-size: 14px; color: var(--green-dark); border-left: 4px solid var(--gold); padding-left: 8px; margin-bottom: 8px; }
-
-/* ═══════════════════════════════════════════
-   BOTTOM BAR (when in game)
-═══════════════════════════════════════════ */
-#game-bar {
-  position: fixed; bottom: 56px; left: 0; right: 0;
-  background: var(--green-dark); color: white;
-  padding: 8px 14px;
-  display: none; align-items: center; gap: 10px;
-  z-index: 99; font-size: 12px;
-  box-shadow: 0 -1px 0 rgba(255,255,255,.1);
-}
-#game-bar.show { display: flex; }
-.bar-dot { width: 7px; height: 7px; border-radius: 50%; background: #4ade80; flex-shrink: 0; animation: pulse 2s infinite; }
-@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
-.bar-code { font-family: monospace; font-size: 14px; font-weight: 900; color: var(--gold); letter-spacing: 3px; }
-.bar-names { flex: 1; color: #a7c4ae; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.bar-leave { background: rgba(255,255,255,.15); border: 1px solid rgba(255,255,255,.25); color: white; border-radius: 6px; padding: 4px 10px; font-size: 11px; font-weight: 900; cursor: pointer; flex-shrink: 0; }
-
-/* ═══════════════════════════════════════════
-   NEW COURSE DIALOG (1.74 原版)
-═══════════════════════════════════════════ */
-.mode-child { margin-left: 0; }
-.action-btn {
+    .content { padding: 12px; display: none; max-width: 1380px; margin: 0 auto; }
+    .content.active { display: block; }
+    .card {
+      background: #ffffff;
+      padding: 16px;
+      border-radius: 18px;
+      border: 1px solid #d6e2d3;
+      box-shadow: 0 10px 30px rgba(31,66,40,.06);
+      margin-bottom: 14px;
+    }
+    h2 {
+      color: #1e4d2b;
+      font-size: 1.14rem;
+      border-left: 5px solid #c6a15b;
+      padding-left: 10px;
+      margin: 0 0 12px;
+      font-weight: 900;
+      line-height: 1.25;
+    }
+    .small-note { font-size: .86rem; color: #61705f; line-height: 1.45; font-weight: 500; }
+    .warning-box {
+      display: none;
+      background: #fff4e5;
+      border: 2px solid #ffcc80;
+      color: #8a4b00;
+      border-radius: 12px;
+      padding: 12px 14px;
+      margin-bottom: 14px;
+      line-height: 1.5;
+      white-space: pre-line;
+    }
+    .danger-box {
+      display: none;
+      background: #ffebee;
+      border: 2px solid #ef9a9a;
+      color: #a72828;
+      border-radius: 12px;
+      padding: 12px 14px;
+      margin-bottom: 14px;
+      line-height: 1.5;
+      white-space: pre-line;
+    }
+    label small { display: block; margin-bottom: 5px; color: #5f6d5d; font-size: .82rem; }
+    input, select {
+      width: 100%;
+      padding: 13px 12px;
+      border: 2px solid #d2ddd0;
+      border-radius: 12px;
+      text-align: center;
+      font-size: 1.05rem;
+      font-weight: 900;
+      background: #fff;
+      color: #18311f;
+      min-height: 48px;
+      transition: border-color .16s ease, box-shadow .16s ease;
+    }
+    input:focus, select:focus {
+      outline: none;
+      border-color: #2f6b3f;
+      box-shadow: 0 0 0 4px rgba(47,107,63,.09);
+    }
+    input[type="checkbox"] {
+      width: 22px;
+      height: 22px;
+      margin-right: 8px;
+      pointer-events: none;
+    }
+    .check-group { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    #match-players-area .check-item,
+    #par-players-area .check-item { min-height: 48px !important; height: 48px !important; padding: 0 12px !important; font-size: .96rem !important; }
+    .player-check-card { transition: border-color .15s; }
+    .player-check-active { border-color: #2f6b3f !important; background: #dfeedd !important; color: #1e4d2b !important; }
+    .check-item {
+      background: #fff;
+      border: 2px solid #cfdbcf;
+      padding: 14px 8px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+      font-weight: 900;
+      cursor: pointer;
+      user-select: none;
+      min-height: 48px;
+    }
+    .check-item.pair-toggle-item { min-height: 48px !important; height: 48px !important; padding: 0 12px !important; font-size: .92rem !important; background: #fff !important; border: 1px solid #d6e2d3 !important; border-radius: 14px !important; box-shadow: 0 6px 16px rgba(31,66,40,.04) !important; }
+    .check-item.pair-toggle-item.active { background: #dfeedd !important; border-color: #2f6b3f !important; }
+    .check-item.pair-toggle-item.disabled { background: #f1f3f0 !important; border-color: #e1e6df !important; color: #adb6ab !important; }
+    .check-item.active { background: #dfeedd; border-color: #2f6b3f; color: #1e4d2b; }
+    .check-item.disabled { background: #f1f3f0; border-color: #e1e6df; color: #adb6ab; cursor: not-allowed; }
+    .mode-stack { display: grid; gap: 8px; }
+    .mode-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border: 2px solid #cfdbcf;
+      border-radius: 14px;
+      padding: 0 14px;
+      cursor: pointer;
+      user-select: none;
+      min-height: 48px;
+      height: 48px;
+      background: #fff;
+    }
+    .mode-row.active { background: linear-gradient(180deg, #edf7ee, #e5f2e6); border-color: #2f6b3f; color: #1e4d2b; }
+    .mode-row.disabled { background: #f1f3f0; border-color: #e1e6df; color: #a5afa2; cursor: not-allowed; }
+    .mode-child { margin-left: 0; }
+    .grid-3 { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 10px; }
+    .grid-4 { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .name-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 0 0 14px; }
+    .name-card { background: #fff; border: 1px solid #d6e2d3; border-radius: 14px; padding: 12px; box-shadow: 0 6px 16px rgba(31,66,40,.04); }
+    .name-card label { display:block; margin-bottom: 6px; }
+    .table-wrapper { overflow: auto; -webkit-overflow-scrolling: touch; background: white; border-radius: 16px; border: 1px solid #d6e2d3; box-shadow: inset 0 1px 0 rgba(255,255,255,.8); max-height: calc(100vh - 220px); }
+    .scoreboard-vertical { --sticky-top: 0px; --info-col-w: 64px; }
+    .scoreboard-vertical table { width: auto !important; min-width: auto !important; table-layout: fixed; }
+    .scoreboard-vertical .sticky-col,
+    .scoreboard-vertical .sticky-hole,
+    .scoreboard-vertical .sticky-par,
+    .scoreboard-vertical .sticky-hdcp {
+      width: var(--info-col-w) !important;
+      min-width: var(--info-col-w) !important;
+      max-width: var(--info-col-w) !important;
+    }
+    .scoreboard-vertical .sticky-hole,
+    .scoreboard-vertical .sticky-par,
+    .scoreboard-vertical .sticky-hdcp { position: sticky; }
+    .scoreboard-vertical .sticky-hole { left: 0; z-index: 64; background: #e8f0e6; }
+    .scoreboard-vertical .sticky-par { left: var(--info-col-w); z-index: 63; background: #e8f0e6; }
+    .scoreboard-vertical .sticky-hdcp { left: calc(var(--info-col-w) * 2); z-index: 62; background: #e8f0e6; }
+    .scoreboard-vertical thead th { position: sticky; top: var(--sticky-top); z-index: 70; background: #e8f0e6; box-shadow: 0 1px 0 #dbe5d8; }
+    .scoreboard-vertical thead .sticky-hole { z-index: 76; }
+    .scoreboard-vertical thead .sticky-par { z-index: 75; }
+    .scoreboard-vertical thead .sticky-hdcp { z-index: 74; }
+    .scoreboard-vertical thead th:not(.sticky-hole):not(.sticky-par):not(.sticky-hdcp),
+    .scoreboard-vertical tbody td:not(.sticky-par):not(.sticky-hdcp),
+    .scoreboard-vertical tbody th:not(.sticky-hole) {
+      width: 76px !important;
+      min-width: 76px !important;
+      max-width: 76px !important;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .scoreboard-vertical td.sticky-par,
+    .scoreboard-vertical td.sticky-hdcp { padding: 3px; }
+    .scoreboard-vertical th.sticky-hdcp,
+    .scoreboard-vertical td.sticky-hdcp { border-right: 2px solid #b5c9b2 !important; }
+    .scoreboard-vertical td.sticky-par input,
+    .scoreboard-vertical td.sticky-hdcp input { min-height: 42px; height: 42px; padding: 0 4px; font-size: 1.02rem; border-radius: 10px; }
+    .scoreboard-vertical .summary-row th, .scoreboard-vertical .summary-row td { background:#f6faf5; color:#1e4d2b; }
+    table { border-collapse: collapse; text-align: center; width: 100%; min-width: 1900px; table-layout: fixed; }
+    th, td {
+      border: 1px solid #e4ebe2;
+      padding: 4px;
+      height: 68px;
+      position: relative;
+      font-weight: 900;
+      font-size: 1.04rem;
+      background: #fff;
+      color: #18311f;
+    }
+    .sticky-col {
+      position: sticky;
+      left: 0;
+      background: #f8fbf7;
+      z-index: 60;
+      width: 108px;
+      border-right: 2px solid #dbe5d8;
+    }
+    .score-cell input { border: none !important; background: transparent !important; width: 100%; height: 100%; font-size: 1.58rem; padding: 0; }
+    #playerRows tr:nth-child(even) td:not(.sticky-par):not(.sticky-hdcp),
+    #playerRows tr:nth-child(even) th:not(.sticky-hole) { background: #f6faf5; }
+    #playerRows tr:nth-child(odd) td:not(.sticky-par):not(.sticky-hdcp),
+    #playerRows tr:nth-child(odd) th:not(.sticky-hole) { background: #ffffff; }
+    #playerRows .summary-row th.sticky-hole { background: #e8f0e6 !important; }
+    #playerRows .summary-row td:not(.sticky-par):not(.sticky-hdcp),
+    #playerRows .summary-row th:not(.sticky-hole) { background: #f0f7ee !important; }
+    /* sticky-par 和 sticky-hdcp 跟隨交替行背景 */
+    #playerRows tr:nth-child(even) td.sticky-par,
+    #playerRows tr:nth-child(even) td.sticky-hdcp { background: #e8f0e6; }
+    #playerRows tr:nth-child(odd) td.sticky-par,
+    #playerRows tr:nth-child(odd) td.sticky-hdcp { background: #e8f0e6; }
+    #playerRows .summary-row td.sticky-par,
+    #playerRows .summary-row td.sticky-hdcp { background: #e8f0e6 !important; }
+    .mark-circle {
+      border: 3px solid #c33232;
+      border-radius: 50%; width: 48px; height: 48px;
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 1;
+    }
+    .mark-double-circle {
+      border: 6px double #c33232;
+      border-radius: 50%; width: 52px; height: 52px;
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 1;
+    }
+    .mark-square {
+      border: 3px solid #2f2f2f;
+      width: 48px; height: 48px;
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 1;
+    }
+    .mark-double-square {
+      border: 6px double #2f2f2f;
+      width: 52px; height: 52px;
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 1;
+    }
+    .res-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 0;
+      border-bottom: 1px solid #edf1ec;
+      font-size: 1.02rem;
+      font-weight: 700;
+    }
+    .red-text { color: #c33232; }
+    .green-text { color: #1e4d2b; }
+    .muted { color: #7a8678; }
+    .final-area {
+      background: linear-gradient(180deg, #2f6b3f 0%, #285937 100%);
+      color: white;
+      padding: 16px;
+      border-radius: 18px;
+      margin-top: 8px;
+      border: 1px solid rgba(255,255,255,.14);
+      box-shadow: 0 14px 28px rgba(24,49,31,.16);
+    }
+    .res-table { min-width: 100% !important; table-layout: auto !important; border: 1px solid #d6e2d3; border-radius: 14px; overflow: hidden; }
+    .res-table th, .res-table td { height: auto; padding: 9px 8px; font-size: .98rem; }
+    .res-table th { background: #f3f7f1; color: #1e4d2b; }
+    .pair-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+    .player-pair-card { border: 2px solid #d6e2d3; border-radius: 14px; padding: 14px; }
+    .player-pair-title { font-size: 1.02rem; color: #1e4d2b; margin-bottom: 10px; }
+    .pair-row {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 8px;
+      padding-bottom: 8px;
+      border-bottom: 1px dashed #e2e9e0;
+    }
+    .pair-row:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom: none; }
+    .pair-row-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .pair-toggle.active { background: #dfeedd; border-color: #2f6b3f; }
+    .pair-toggle.disabled { background: #f1f3f0; border-color: #e1e6df; cursor: not-allowed; }
+    .pair-name { text-align: left; font-size: .98rem; }
+    .pair-score-input { padding: 10px 8px; font-size: .98rem; min-height: 44px; }
+    .pair-score-input:disabled { background: #f4f5f3; color: #aaa; }
+    .pair-main { display:grid; gap:6px; }
+    .pair-mode-switch { display:flex; gap:8px; }
+    .pair-mode-chip {
+      border: 2px solid #cfdbcf;
+      background:#fff;
+      color: #18311f;
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: .78rem;
+      font-weight: 900;
+      cursor:pointer;
+      user-select:none;
+      white-space: nowrap;
+    }
+    .pair-mode-chip.active { background: #dfeedd; border-color: #2f6b3f; color: #1e4d2b; }
+    .pair-input-wrap { display:none; }
+    .pair-input-wrap.show { display:block; }
+    .pair-special-grid { display:grid; grid-template-columns: repeat(3,1fr); gap:8px; }
+    .pair-special-grid input { min-height: 44px; padding: 10px 8px; font-size: .95rem; }
+    .rank-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+    .action-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 0; }
+    button.action-btn {
       border: none;
       border-radius: 12px;
       padding: 12px 16px;
@@ -449,6 +486,138 @@ select.inp { cursor: pointer; }
       color: white;
       box-shadow: 0 6px 18px rgba(47,107,63,.16);
     }
+    button.action-btn.secondary { background: #607d8b; }
+    button.action-btn.danger { background: #c62828; }
+    .hole-win-log { display: grid; gap: 6px; }
+    .hole-win-item {
+      background: #f6faf5;
+      border: 1px solid #dde7db;
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-size: .96rem;
+      color: #18311f;
+    }
+    .summary-table { width: 100%; min-width: unset; table-layout: auto; border-collapse: collapse; border: 1px solid #d6e2d3; border-radius: 14px; overflow: hidden; }
+    .summary-table th, .summary-table td { height: auto; padding: 10px 8px; font-size: .96rem; }
+    .summary-table th { background: #3a7a4a; color: #fff; font-weight: 900; }
+    .summary-table td { color: #18311f; border-bottom: 1px solid #e8efe6; font-weight: 700; }
+    .summary-table tr:last-child td { border-bottom: none; }
+    .summary-table tbody tr:nth-child(even) td { background: #f3f7f1; }
+    .summary-table tbody tr:nth-child(odd) td { background: #ffffff; }
+    
+    .center-note { text-align: center; color: #72806f; padding: 8px 0 2px; font-size: .95rem; }
+    .result-grid { display: grid; grid-template-columns: 1.12fr .88fr; gap: 12px; }
+    .result-stack { display: grid; gap: 12px; }
+    #result .card { overflow: hidden; }
+
+.result-version-inline {
+  display: flex;
+  justify-content: flex-end;
+  margin: -2px 0 8px;
+}
+.collapse-block { border: 1px solid #dde7db; border-radius: 14px; overflow: hidden; background: #fff; margin-top: 10px; }
+.collapse-head {
+  width: 100%; border: none; background: #f4f8f3; color: #1e4d2b;
+  font-size: .98rem; font-weight: 900; padding: 13px 14px; text-align: left; cursor: pointer;
+  display: flex; justify-content: space-between; align-items: center; gap: 10px;
+}
+.collapse-head.major { background: linear-gradient(180deg, #edf6ee, #e7f1e8); }
+.collapse-head.minor { background: #f8fbf7; font-size: .94rem; padding: 11px 12px; }
+.collapse-title { flex: 1; }
+.collapse-icon {
+  flex: 0 0 auto;
+  font-size: 1.02rem;
+  color: #1e4d2b;
+  line-height: 1;
+  min-width: 16px;
+  text-align: right;
+}
+.collapse-head.minor .collapse-icon { font-size: .94rem; color: #61705f; }
+.collapse-body { display: none; padding: 10px; border-top: 1px solid #e3ece1; background: #fff; }
+.collapse-block.open > .collapse-body { display: block; }
+.section-summary {
+  background: #eef5ec; border: 1px solid #dbe7d8; border-radius: 12px; padding: 10px 12px;
+  font-size: .93rem; color: #18311f; margin-bottom: 8px; line-height: 1.5;
+}
+.detail-summary-card {
+  background: linear-gradient(180deg, #2f6b3f 0%, #2a5a38 100%);
+  color: #fff;
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  box-shadow: 0 8px 18px rgba(24,49,31,.12);
+}
+.detail-summary-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+.detail-summary-title { font-size: 1rem; font-weight: 900; }
+.detail-summary-total { font-size: .94rem; font-weight: 900; }
+.detail-summary-sub { font-size: .86rem; opacity: .94; }
+.detail-section {
+  border: 1px solid #e0e9de;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fcfdfc;
+  margin-top: 8px;
+}
+.detail-section-title {
+  background: #f2f7f1;
+  color: #1e4d2b;
+  font-size: .9rem;
+  font-weight: 900;
+  padding: 9px 11px;
+  border-bottom: 1px solid #e2ebe0;
+}
+.hole-win-log { display: block; }
+.hole-win-item {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid #ecf1ea;
+  border-radius: 0;
+  padding: 9px 11px;
+  font-size: .94rem;
+  color: #18311f;
+}
+.hole-win-item:last-child { border-bottom: none; }
+.hole-win-item strong { color: #1e4d2b; }
+.export-wrap { margin-bottom: 10px; display: flex; justify-content: flex-end; }
+.jpg-capture { background: #fff; border-radius: 18px; }
+
+.vegas-rank-btn {
+  width: 100%;
+  padding: 13px 44px 13px 12px;
+  border: 2px solid #d2ddd0;
+  border-radius: 12px;
+  text-align: left;
+  font-size: 1.05rem;
+  font-weight: 900;
+  background: #fff;
+  color: #18311f;
+  min-height: 48px;
+  position: relative;
+  cursor: pointer;
+}
+.vegas-rank-btn::after {
+  content: '▾';
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1.1rem;
+  color: #888;
+  line-height: 1;
+  pointer-events: none;
+}
+.vegas-rank-btn:focus {
+  outline: none;
+  border-color: #2f6b3f;
+  box-shadow: 0 0 0 4px rgba(47,107,63,.09);
+}
 .rank-picker-overlay {
   position: fixed;
   inset: 0;
@@ -459,6 +628,7 @@ select.inp { cursor: pointer; }
   z-index: 3000;
   padding: 18px;
 }
+.rank-picker-overlay.show { display: flex; }
 .rank-picker-sheet {
   width: min(420px, 100%);
   background: #fff;
@@ -486,6 +656,119 @@ select.inp { cursor: pointer; }
   border-bottom: 1px solid #edf1ec;
   cursor: pointer;
 }
+.rank-picker-option:last-child { border-bottom: none; }
+
+
+.player-extra.hidden { display: none; }
+.matrix-table { min-width: 100% !important; table-layout: auto !important; border: 1px solid #d6e2d3; border-radius: 14px; overflow: hidden; }
+.matrix-table th, .matrix-table td { height: auto; padding: 8px 8px; font-size: .92rem; }
+.matrix-table .matrix-head-row th { background: #3a7a4a; color: #fff; font-weight: 900; }
+.matrix-table .matrix-row-even td, .matrix-table .matrix-row-even th { background: #f3f7f1; color: #1e4d2b; }
+.matrix-table .matrix-row-odd td, .matrix-table .matrix-row-odd th { background: #ffffff; color: #1e4d2b; }
+.matrix-table td .red-text, .matrix-table th .red-text, .matrix-table td.red-text { color: #c33232 !important; }
+.matrix-table td .muted, .matrix-table th .muted, .matrix-table td.muted { color: #7c8879 !important; }
+.summary-table td.red-text { color: #c33232 !important; }
+.summary-table td.muted { color: #7c8879 !important; }
+.matrix-table td.total-col { background: #eef5ec; font-weight: 900; }
+.matrix-table th.total-col { background: #2f6b3f; color: #fff; font-weight: 900; }
+.matrix-table .matrix-row-even td.total-col { background: #f3f7f1; }
+.matrix-table .matrix-row-odd td.total-col { background: #ffffff; }
+.matrix-note { margin-top: 8px; font-size: .88rem; color: #667561; }
+.capture-section { margin-top: 14px; }
+.capture-section .capture-title { font-size: 1.02rem; font-weight: 900; margin: 0 0 8px; color: #fff; }
+.capture-section .capture-card { background: rgba(255,255,255,.96); border-radius: 14px; padding: 10px; }
+.export-preview-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.55); display: none; z-index: 4000;
+  align-items: center; justify-content: center; padding: 18px;
+}
+.export-preview-overlay.show { display: flex; }
+.export-preview-sheet {
+  width: min(720px, 100%); max-height: 92vh; background: #fff; border-radius: 18px; overflow: hidden;
+  box-shadow: 0 24px 48px rgba(0,0,0,.24);
+}
+.export-preview-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 14px 16px; border-bottom: 1px solid #e5ece3; font-size: .96rem; color: #1e4d2b;
+}
+.export-preview-close {
+  border: none; background: #eef5ec; color: #1e4d2b; width: 38px; height: 38px; border-radius: 10px; cursor: pointer; font-size: 1rem; font-weight: 900;
+}
+.export-preview-body { padding: 14px; overflow: auto; max-height: calc(92vh - 68px); background: #f4f8f2; }
+.export-preview-body img { width: 100%; height: auto; display: block; border-radius: 12px; }
+
+
+.top-floating-bar {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+.version-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.94);
+  color: #1e4d2b;
+  border: 1px solid rgba(47,107,63,.12);
+  box-shadow: 0 8px 18px rgba(24,49,31,.10);
+  font-size: .84rem;
+  font-weight: 900;
+  backdrop-filter: blur(10px);
+  margin-bottom: 10px;
+}
+.floating-btn {
+  border: none;
+  background: linear-gradient(180deg, #2f6b3f, #1e4d2b);
+  color: #fff;
+  padding: 9px 14px;
+  border-radius: 999px;
+  font-size: .84rem;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(24,49,31,.12);
+}
+.section-grid-3 { display:grid; grid-template-columns: 2fr 1.3fr 1fr; gap:12px; }
+
+.new-game-btn { width:100%; min-height:50px; border:none; border-radius:12px; background:linear-gradient(180deg, #2f6b3f, #1e4d2b); color:#fff; font-size:1rem; font-weight:900; cursor:pointer; box-shadow:0 6px 18px rgba(24,49,31,.12); -webkit-appearance: none; opacity: 1; }
+.setting-section-title { margin-bottom:12px; }
+.setting-subcard { background:#fff; border:1px solid #d6e2d3; border-radius:14px; padding:14px; box-shadow:0 6px 16px rgba(31,66,40,.04); margin-bottom:14px; }
+.export-option-grid {
+  display:grid;
+  grid-template-columns: repeat(3, minmax(0,1fr));
+  gap:10px;
+  margin:10px 0 12px;
+}
+.export-option {
+  background: #f4f8f2;
+  border: 2px solid #d6e2d3;
+  color: #1e4d2b;
+  border-radius: 12px;
+  padding: 12px 10px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  cursor:pointer;
+  user-select:none;
+  font-weight:900;
+  min-height: 48px;
+}
+.export-option input {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  pointer-events: none;
+}
+.export-option.active {
+  background: #e4efe2;
+  border-color: #2f6b3f;
+}
 .mode-child-head {
   display: flex;
   align-items: center;
@@ -501,15 +784,101 @@ select.inp { cursor: pointer; }
   margin-left: 18px;
 }
 .mode-child-group { display: grid; gap: 6px; margin-left: 0; margin-top: -2px; }
-.action-btn {
+.mode-sub-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 2px solid #cfdbcf;
+  border-radius: 12px;
+  padding: 0 14px;
+  min-height: 48px;
+  height: 48px;
+  background: #fff;
+  font-size: .98rem;
+  font-weight: 900;
+  color: #18311f;
+}
+.mode-sub-collapse { cursor: pointer; user-select: none; }
+.mode-sub-collapse:hover { background: #f6faf5; }
+.mode-sub-row input[type="checkbox"] { pointer-events: none; }
+.mode-sub-row.active { background: linear-gradient(180deg, #edf7ee, #e5f2e6); border-color: #2f6b3f; color: #1e4d2b; }
+.mode-sub-row.disabled { background: #f1f3f0; border-color: #e1e6df; color: #a5afa2; cursor: not-allowed; }
+.sub-collapse-icon { font-size: .85rem; color: #7c8879; }
+.mode-child-head.disabled { background: #f1f3f0; border-color: #e1e6df; color: #a5afa2; cursor: not-allowed; }
+.handicap-collapse-icon { font-size: .9rem; color: #7c8879; }
+.export-btn-row {
+  display: flex;
+  gap: 10px;
+}
+.export-btn-row .action-btn {
   flex: 1;
   min-height: 48px;
 }
+/* ── 細項新介面 ── */
+.detail-unified-list { display: grid; gap: 12px; }
+.detail-match-card {
+  border: 1px solid #d6e2d3;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #fff;
+}
+.detail-match-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: linear-gradient(180deg, #2f6b3f, #1e4d2b);
+  color: #fff;
+  padding: 12px 14px;
+  font-size: 1rem;
+  font-weight: 900;
+}
+.detail-match-vs { font-size: .92rem; }
+.detail-match-total { font-size: .86rem; opacity: .92; }
+.detail-halves { display: grid; grid-template-columns: 1fr 1fr; }
+.detail-half { border-right: 1px solid #d6e2d3; }
+.detail-half:last-child { border-right: none; }
+.detail-half-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #f2f7f1;
+  padding: 9px 12px;
+  font-size: .9rem;
+  font-weight: 900;
+  color: #1e4d2b;
+  border-bottom: 1px solid #e3ece1;
+}
+.detail-half-sub { font-size: .82rem; color: #7c8879; font-weight: 600; }
+.detail-hole-list { padding: 4px 0; }
+.detail-hole-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border-bottom: 1px solid #f0f4ef;
+  font-size: .88rem;
+}
+.detail-hole-row:last-child { border-bottom: none; }
+.detail-hole-row.win { background: #fff; }
+.detail-hole-row.tie { background: #fafafa; color: #7c8879; }
+.detail-hole-num { min-width: 48px; font-weight: 900; color: #1e4d2b; font-size: .82rem; }
+.detail-hole-result { flex: 1; font-weight: 600; }
+.detail-hole-result strong { color: #1e4d2b; }
+.detail-hole-teams { font-size: .76rem; color: #7c8879; white-space: nowrap; }
+@media (max-width: 860px) {
+  .detail-halves { grid-template-columns: 1fr; }
+  .detail-half { border-right: none; border-bottom: 1px solid #d6e2d3; }
+  .detail-half:last-child { border-bottom: none; }
+}
+
+/* ── 新球場彈窗 ── */
 .new-course-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,.45);
   display: none; align-items: flex-start; justify-content: center;
   z-index: 5000; padding: 18px; overflow-y: auto;
 }
+.new-course-overlay.show { display: flex; }
 .new-course-sheet {
   width: min(520px, 100%); background: #fff;
   border-radius: 18px; overflow: hidden;
@@ -529,6 +898,7 @@ select.inp { cursor: pointer; }
   padding: 18px 12px; font-size: 1.1rem; font-weight: 900;
   color: #1e4d2b; cursor: pointer; text-align: center;
 }
+.new-course-type-btn:hover { background: #dfeedd; border-color: #2f6b3f; }
 .new-course-hole-grid { display: grid; gap: 8px; }
 .new-course-hole-row {
   display: grid; grid-template-columns: 32px 1fr 1fr; gap: 8px; align-items: center;
@@ -542,11 +912,14 @@ select.inp { cursor: pointer; }
   border: none; background: rgba(255,255,255,.2); color: #fff;
   width: 34px; height: 34px; border-radius: 8px; cursor: pointer; font-size: 1rem;
 }
+
+/* ── 27洞選區彈窗 ── */
 .zone-select-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,.45);
   display: none; align-items: center; justify-content: center;
   z-index: 5000; padding: 18px;
 }
+.zone-select-overlay.show { display: flex; }
 .zone-select-sheet {
   width: min(380px, 100%); background: #fff;
   border-radius: 18px; overflow: hidden;
@@ -566,289 +939,598 @@ select.inp { cursor: pointer; }
   font-size: 1.1rem; font-weight: 900; color: #1e4d2b;
   cursor: pointer; text-align: center;
 }
+.zone-select-btn.active { background: #dfeedd; border-color: #2f6b3f; }
 .zone-select-error { color: #a72828; font-size: .88rem; margin-bottom: 8px; display: none; }
-</style>
+.zone-order-badge {
+  display: inline-block;
+  margin-left: 4px;
+  font-size: .85rem;
+  color: #1e4d2b;
+}
+
+.detail-card-icon { font-size: .85rem; color: rgba(255,255,255,.8); }
+.detail-card-body { padding: 0; }
+.result-collapse-card { padding: 0 !important; overflow: hidden; }
+.result-collapse-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px; cursor: pointer; user-select: none;
+}
+.result-collapse-icon { font-size: .9rem; color: #7c8879; }
+.result-collapse-body { padding: 0 16px 14px; }
+.course-cell-display {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  min-height: 42px;
+  font-size: 1.02rem;
+  font-weight: 900;
+  color: #18311f;
+  background: transparent;
+  border-radius: 0;
+  border: none;
+  padding: 4px;
+  user-select: none;
+}
+.export-download-btn {
+  border:none;
+  background:linear-gradient(180deg, #2f6b3f, #1e4d2b);
+  color:#fff;
+  border-radius:10px;
+  padding:10px 14px;
+  font-weight:900;
+  cursor:pointer;
+}
+
+@media (max-width: 1024px) {
+  .result-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 860px) {
+  .grid-3, .grid-4, .result-grid, .section-grid-3 { grid-template-columns: 1fr; }
+  .rank-grid { grid-template-columns: 1fr 1fr; }
+  .export-option-grid { grid-template-columns: 1fr; }
+  .top-floating-bar { display: none; }
+  .tab-nav { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: stretch; }
+  .tab-btn-group { min-width: 0; }
+  .mobile-version-badge { display: inline-flex; align-items: center; justify-content: center; padding: 0 10px; font-size: .74rem; font-weight: 900; color: #1e4d2b; white-space: nowrap; background: rgba(47,107,63,.06); border-left: 1px solid rgba(47,107,63,.08); }
+  .pair-special-grid { grid-template-columns: 1fr; }
+  .tab-btn { font-size: .95rem; padding: 15px 6px; }
+  .content { padding: 10px; }
+  .card { padding: 13px; border-radius: 16px; margin-bottom: 10px; }
+  h2 { font-size: 1.02rem; margin-bottom: 10px; }
+  .small-note { font-size: .8rem; }
+  input, select { min-height: 46px; font-size: 1rem; padding: 11px 10px; }
+  .mode-row, .check-item { min-height: 48px; padding: 11px 12px; }
+  .res-row { font-size: .96rem; padding: 8px 0; }
+  .hole-win-item { padding: 8px 10px; font-size: .92rem; }
+  .summary-table th, .summary-table td { font-size: .86rem; padding: 8px 6px; }
+  .matrix-table th, .matrix-table td { font-size: .86rem; padding: 7px 6px; }
+
+  .scoreboard-vertical { --sticky-top: 0px; --info-col-w: 44px; }
+  .scoreboard-vertical table { width: 100% !important; min-width: unset !important; }
+  .scoreboard-vertical th, .scoreboard-vertical td { height: 52px; padding: 2px; font-size: .86rem; }
+  .scoreboard-vertical thead th:not(.sticky-hole):not(.sticky-par):not(.sticky-hdcp),
+  .scoreboard-vertical tbody td:not(.sticky-par):not(.sticky-hdcp),
+  .scoreboard-vertical tbody th:not(.sticky-hole) {
+    width: auto !important;
+    min-width: 60px !important;
+    max-width: none !important;
+  }
+  .scoreboard-vertical td.sticky-par,
+  .scoreboard-vertical td.sticky-hdcp { padding: 2px; }
+  .scoreboard-vertical td.sticky-par input,
+  .scoreboard-vertical td.sticky-hdcp input { min-height: 34px; height: 34px; padding: 0 2px; font-size: .95rem; border-radius: 8px; }
+  .scoreboard-vertical .score-cell input { font-size: 1.05rem; }
+  .scoreboard-vertical .mark-circle, .scoreboard-vertical .mark-square { width: 28px; height: 28px; border-width: 2px; }
+  .scoreboard-vertical .mark-double-circle, .scoreboard-vertical .mark-double-square { width: 32px; height: 32px; border-width: 4px; }
+  .scoreboard-vertical thead th { font-size: .78rem; }
+  .scoreboard-vertical .summary-row th, .scoreboard-vertical .summary-row td { font-size: .78rem; }
+  .table-wrapper { max-height: calc(100vh - 180px); }
+}
+
+  </style>
 </head>
 <body>
+  <!-- ── 多人 toast ── -->
+  <div id="mp-toast" style="
+    position:fixed;bottom:24px;left:50%;
+    transform:translateX(-50%) translateY(120px);
+    background:#1e4d2b;color:#fff;
+    padding:11px 22px;border-radius:24px;
+    font-size:14px;font-weight:900;
+    transition:transform 0.3s ease,opacity 0.3s ease;
+    z-index:9999;white-space:nowrap;
+    box-shadow:0 4px 16px rgba(0,0,0,.25);
+    pointer-events:none;opacity:0;visibility:hidden;
+  "></div>
 
-<div id="toast"></div>
-
-<!-- ═══ LOGIN PAGE ═══ -->
-<div class="page active" id="page-login">
-  <div class="login-hero">
-    <div class="logo">⛳</div>
-    <h1>Golf Score</h1>
-    <p>多人即時高爾夫計分</p>
+  <!-- ── 多人底部 bar ── -->
+  <div id="mp-bar" style="
+    display:none;position:fixed;bottom:0;left:0;right:0;
+    background:#1e4d2b;color:#fff;
+    padding:10px 16px;
+    align-items:center;gap:10px;
+    z-index:2000;box-shadow:0 -2px 12px rgba(0,0,0,.2);
+    font-size:13px;font-weight:700;
+  ">
+    <div style="width:8px;height:8px;border-radius:50%;background:#4ade80;flex-shrink:0;animation:mppulse 2s infinite"></div>
+    <span style="font-family:monospace;font-size:15px;font-weight:900;color:#c6a15b;letter-spacing:3px" id="mpBarCode"></span>
+    <span style="flex:1;font-size:12px;color:#a7c4ae;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="mpBarNames"></span>
+    <button onclick="mpLeave()" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:8px;padding:5px 12px;font-size:12px;cursor:pointer;font-family:inherit;font-weight:700">離開球局</button>
   </div>
-  <div class="login-form">
-    <button class="btn btn-google" onclick="mpGoogleLogin()">
-      <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
-      使用 Google 帳號登入
-    </button>
-    <div class="divider">或</div>
-    <div class="field">
-      <label>暱稱（不需要帳號）</label>
-      <input class="inp" id="anonName" placeholder="例：小明、阿志" maxlength="10" />
+  <style>
+    @keyframes mppulse{0%,100%{opacity:1}50%{opacity:.4}}
+    /* 多人模式：計分頁只顯示計分和結算 */
+    body.mp-active .top-floating-bar{display:none!important}
+    body.mp-active #tab-set{display:none!important}
+    body.mp-active .setup-guide-bar{display:none!important}
+    body.mp-active{padding-bottom:56px!important}
+    /* 訪客：隱藏結算以外的其他控制 */
+    body.mp-guest #editCourseBtn{display:none}
+    body.mp-guest #course-save-area{display:none}
+  </style>
+
+  <!-- ── 多人 overlay ── -->
+  <div id="mp-overlay" style="
+    position:fixed;inset:0;
+    background:linear-gradient(180deg,#f4f8f2,#eef4ec);
+    z-index:9000;overflow-y:auto;
+    font-family:'Noto Sans TC',sans-serif;
+    font-weight:700;color:#18311f;
+  ">
+
+  <!-- 登入 -->
+  <div id="mp-pg-login" style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px">
+    <div style="text-align:center;margin-bottom:32px">
+      <div style="font-size:64px;margin-bottom:8px">⛳</div>
+      <div style="font-size:26px;font-weight:900;color:#1e4d2b">Golf Score</div>
+      <div style="font-size:13px;color:#7c8879;margin-top:4px">多人即時計分</div>
     </div>
-    <button class="btn btn-outline" onclick="mpAnonLogin()">快速進入</button>
-    <div class="err-box" id="loginErr"></div>
-  </div>
-</div>
-
-<!-- ═══ HOME PAGE ═══ -->
-<div class="page" id="page-home">
-  <div class="topbar">
-    <div class="topbar-title">⛳ Golf Score</div>
-    <button class="topbar-action" onclick="mpLogout()">登出</button>
-  </div>
-  <div class="scroll-area">
-    <div style="text-align:center;padding:24px 0 16px">
-      <div style="font-size:22px;font-weight:900;color:var(--green-dark)" id="homeName">您好！</div>
-      <div style="font-size:13px;color:var(--muted);margin-top:4px">今天要開球了嗎？</div>
-    </div>
-    <button class="btn btn-primary" onclick="mpCreateGame()">🏌️ 建立新球局</button>
-    <button class="btn btn-outline" onclick="showPage('page-join')">🤝 加入球局</button>
-  </div>
-</div>
-
-<!-- ═══ JOIN PAGE ═══ -->
-<div class="page" id="page-join">
-  <div class="topbar">
-    <div class="topbar-title">🤝 加入球局</div>
-    <button class="topbar-action" onclick="showPage('page-home')">← 返回</button>
-  </div>
-  <div class="scroll-area">
-    <div class="card">
-      <div class="field">
-        <label>輸入房間碼</label>
-        <input class="inp code" id="joinCode" placeholder="ABCD" maxlength="4" />
+    <div style="width:100%;max-width:380px">
+      <button onclick="mpGoogleLogin()" style="width:100%;min-height:50px;border:2px solid #d6e2d3;border-radius:12px;background:#fff;color:#333;font-size:15px;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:10px;font-family:inherit">
+        <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+        使用 Google 帳號登入
+      </button>
+      <div style="display:flex;align-items:center;gap:10px;color:#7c8879;font-size:12px;margin:12px 0">
+        <div style="flex:1;height:1px;background:#d6e2d3"></div>或<div style="flex:1;height:1px;background:#d6e2d3"></div>
       </div>
-      <div class="err-box" id="joinErr"></div>
-      <button class="btn btn-primary" onclick="mpJoinGame()">加入</button>
+      <div style="font-size:12px;color:#7c8879;margin-bottom:4px">暱稱（不需要帳號）</div>
+      <input id="mpAnonName" placeholder="例：小明、阿志" maxlength="10" style="width:100%;padding:11px 14px;border:2px solid #d6e2d3;border-radius:10px;font-size:15px;font-weight:700;outline:none;margin-bottom:8px;box-sizing:border-box;font-family:inherit" />
+      <button onclick="mpAnonLogin()" style="width:100%;min-height:50px;border:2px solid #2f6b3f;border-radius:12px;background:#fff;color:#2f6b3f;font-size:15px;font-weight:900;cursor:pointer;margin-bottom:8px;font-family:inherit">快速進入</button>
+      <div id="mpLoginErr" style="display:none;background:#fee2e2;border-radius:10px;padding:10px 14px;font-size:13px;color:#b91c1c;margin-bottom:8px"></div>
     </div>
   </div>
-</div>
 
-<!-- ═══ LOBBY PAGE ═══ -->
-<div class="page" id="page-lobby">
-  <div class="topbar">
-    <div class="topbar-title" id="lobbyTitle">⏳ 等待球友加入</div>
-    <button class="topbar-action" onclick="mpLeave()">離開</button>
+  <!-- 首頁 -->
+  <div id="mp-pg-home" style="display:none;min-height:100vh;display:none;flex-direction:column;align-items:center;justify-content:center;padding:24px">
+    <div style="text-align:center;margin-bottom:32px">
+      <div style="font-size:56px;margin-bottom:8px">⛳</div>
+      <div style="font-size:22px;font-weight:900;color:#1e4d2b" id="mpHomeName">您好！</div>
+    </div>
+    <div style="width:100%;max-width:380px">
+      <button onclick="mpCreateGame()" style="width:100%;min-height:50px;border:none;border-radius:12px;background:linear-gradient(180deg,#2f6b3f,#1e4d2b);color:#fff;font-size:15px;font-weight:900;cursor:pointer;margin-bottom:10px;font-family:inherit;box-shadow:0 4px 14px rgba(24,49,31,.15)">🏌️ 建立新球局</button>
+      <button onclick="mpShowJoin()" style="width:100%;min-height:50px;border:2px solid #2f6b3f;border-radius:12px;background:#fff;color:#2f6b3f;font-size:15px;font-weight:900;cursor:pointer;margin-bottom:10px;font-family:inherit">🤝 加入球局</button>
+      <!-- 加入球局輸入框（展開） -->
+      <div id="mpJoinArea" style="display:none;margin-bottom:10px">
+        <input id="mpJoinCode" placeholder="ABCD" maxlength="4" style="width:100%;padding:12px;border:2px solid #d6e2d3;border-radius:10px;font-family:monospace;font-size:2rem;letter-spacing:10px;text-transform:uppercase;text-align:center;outline:none;margin-bottom:8px;box-sizing:border-box;font-weight:700" />
+        <button onclick="mpJoinGame()" style="width:100%;min-height:50px;border:none;border-radius:12px;background:linear-gradient(180deg,#2f6b3f,#1e4d2b);color:#fff;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit">加入</button>
+        <div id="mpJoinErr" style="display:none;background:#fee2e2;border-radius:10px;padding:10px 14px;font-size:13px;color:#b91c1c;margin-top:8px"></div>
+      </div>
+      <button onclick="mpLogout()" style="background:none;border:none;color:#7c8879;font-size:13px;cursor:pointer;font-family:inherit;font-weight:700;padding:8px;width:100%">登出</button>
+    </div>
   </div>
-  <div class="scroll-area">
 
-    <!-- 房間碼 -->
-    <div class="card">
-      <div class="room-code-box" id="lobbyCode" onclick="mpCopy()">----</div>
-      <button class="copy-btn" onclick="mpCopy()">📋 複製房間碼</button>
-      <div style="font-size:12px;color:var(--muted);text-align:center">分享給球友，讓他們輸入這個碼加入</div>
+  <!-- 等待室 -->
+  <div id="mp-pg-lobby" style="display:none">
+    <div style="background:rgba(255,255,255,.96);border-bottom:1px solid #d6e2d3;padding:0 16px;height:52px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10">
+      <div style="font-size:16px;font-weight:900;color:#1e4d2b">⏳ 等待球友加入</div>
+      <button onclick="mpLeave()" style="background:none;border:none;color:#2f6b3f;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit">離開</button>
     </div>
+    <div style="padding:14px;max-width:560px;margin:0 auto">
 
-    <!-- 已加入球友 -->
-    <div class="card">
-      <div class="card-title">👥 已加入（<span id="lobbyCount">0</span>/4 人）</div>
-      <div id="lobbyPlayers"></div>
-    </div>
+      <!-- 房間碼 -->
+      <div style="background:#fff;border-radius:14px;border:1px solid #d6e2d3;box-shadow:0 2px 12px rgba(24,49,31,.08);padding:16px;margin-bottom:12px">
+        <div id="mpRoomCode" onclick="mpCopy()" style="background:#1e4d2b;color:#c6a15b;font-family:monospace;font-size:2.5rem;font-weight:700;text-align:center;letter-spacing:12px;padding:16px;border-radius:12px;cursor:pointer;margin-bottom:8px;user-select:none">----</div>
+        <button onclick="mpCopy()" style="width:100%;background:rgba(198,161,91,.12);border:1.5px solid rgba(198,161,91,.4);color:#9a7830;border-radius:10px;padding:8px;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit">📋 複製房間碼</button>
+      </div>
 
-    <!-- 玩家順序 -->
-    <div class="card" id="slotsCard">
-      <div class="card-title">
-        👤 玩家順序
-        <span style="font-size:11px;color:var(--muted);font-weight:700">可拖曳調整</span>
+      <!-- 球友列表（主持人可手動輸入名字） -->
+      <div style="background:#fff;border-radius:14px;border:1px solid #d6e2d3;box-shadow:0 2px 12px rgba(24,49,31,.08);padding:16px;margin-bottom:12px">
+        <div style="font-size:13px;font-weight:900;color:#1e4d2b;margin-bottom:12px">👥 球友（<span id="mpPlayerCount">0</span>/4 人）</div>
+        <div id="mpPlayerList"></div>
       </div>
-      <div id="slotsArea"></div>
-    </div>
 
-    <!-- 球場 -->
-    <div class="card" id="courseCard">
-      <div class="card-title"><span class="num">1</span> 球場</div>
-      <div class="field">
-        <label>選擇球場</label>
-        <select class="inp" id="loopCourse" onchange="mpLobbySync()">
-          <option value="">請選擇球場</option>
-        </select>
-      </div>
-      <div class="grid-2">
-        <div class="field">
-          <label>起始洞</label>
-          <input class="inp center" type="number" id="loopStart" value="1" min="1" max="18" oninput="mpLobbySync()" />
-        </div>
-        <div style="display:flex;align-items:flex-end;padding-bottom:10px" id="newCourseBtnWrap" class="host-only">
-          <button class="btn btn-outline btn-sm" onclick="mpNewCourse()" style="width:100%">＋ 新增球場</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- 倍率 -->
-    <div class="card" id="rateCard">
-      <div class="card-title"><span class="num">2</span> 倍率設定</div>
-      <div class="field"><label>點數／元</label><input class="inp center" type="number" id="loopPtVal" value="100" oninput="mpLobbySync()" /></div>
-      <div class="grid-2">
-        <div class="field"><label>Birdie 倍率</label><input class="inp center" type="number" id="loopMB" value="2" oninput="mpLobbySync()" /></div>
-        <div class="field"><label>4 Par Eagle 倍率</label><input class="inp center" type="number" id="loopME4" value="5" oninput="mpLobbySync()" /></div>
-        <div class="field"><label>5 Par Eagle 倍率</label><input class="inp center" type="number" id="loopME5" value="3" oninput="mpLobbySync()" /></div>
-        <div class="field"><label>HIO 倍率</label><input class="inp center" type="number" id="loopMHIO" value="10" oninput="mpLobbySync()" /></div>
-      </div>
-    </div>
-
-    <!-- 比賽模式 -->
-    <div class="card" id="modeCard">
-      <div class="card-title"><span class="num">3</span> 比賽模式</div>
-      <!-- Vegas -->
-      <div class="mode-row" id="modeRowVegas" onclick="mpToggleMode('Vegas')">
-        <input type="checkbox" id="chkVegas">
-        <span class="mode-label">Vegas</span>
-      </div>
-      <div class="mode-sub" id="vegasSub">
-        <div class="mode-row" id="modeRowCarry" onclick="mpToggleMode('Carry')" style="margin-bottom:6px">
-          <input type="checkbox" id="chkCarry">
-          <span class="mode-label" style="font-size:14px">平手遞延</span>
+      <!-- 球場（主持人才能改） -->
+      <div class="card" id="mpCourseCard" style="margin-bottom:12px">
+        <h2 style="font-size:13px;font-weight:900;color:#1e4d2b;border:none;margin-bottom:12px;display:flex;align-items:center;gap:6px">
+          <span style="width:22px;height:22px;border-radius:50%;background:#2f6b3f;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0">1</span>
+          球場
+        </h2>
+        <label style="font-size:12px;color:#7c8879;display:block;margin-bottom:4px">選擇球場</label>
+        <select id="mpCourse" onchange="mpLobbySync()" style="width:100%;padding:11px 14px;border:2px solid #d6e2d3;border-radius:10px;font-size:15px;font-weight:700;background:#fff;margin-bottom:8px;box-sizing:border-box;font-family:inherit;outline:none"></select>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div>
+            <label style="font-size:12px;color:#7c8879;display:block;margin-bottom:4px">起始洞</label>
+            <input type="number" id="mpStartHole" value="1" min="1" max="18" oninput="mpLobbySync()" style="width:100%;padding:11px 14px;border:2px solid #d6e2d3;border-radius:10px;font-size:15px;font-weight:700;text-align:center;box-sizing:border-box;outline:none;font-family:inherit" />
+          </div>
+          <div id="mpNewCourseWrap" style="display:flex;align-items:flex-end;padding-bottom:2px">
+            <button onclick="mpNewCourse()" style="width:100%;min-height:48px;border:2px solid #2f6b3f;border-radius:10px;background:#fff;color:#2f6b3f;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit">＋ 新增球場</button>
+          </div>
         </div>
       </div>
-      <!-- 比洞賽 -->
-      <div class="mode-row" id="modeRowMatch" onclick="mpToggleMode('Match')">
-        <input type="checkbox" id="chkMatch">
-        <span class="mode-label">比洞賽</span>
+
+      <!-- 倍率 -->
+      <div class="card" id="mpRateCard" style="margin-bottom:12px">
+        <h2 style="font-size:13px;font-weight:900;color:#1e4d2b;border:none;margin-bottom:12px;display:flex;align-items:center;gap:6px">
+          <span style="width:22px;height:22px;border-radius:50%;background:#2f6b3f;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0">2</span>
+          倍率設定
+        </h2>
+        <label style="font-size:12px;color:#7c8879;display:block;margin-bottom:4px">點數／元</label>
+        <input type="number" id="mpPtVal" value="100" oninput="mpLobbySync()" style="width:100%;padding:11px 14px;border:2px solid #d6e2d3;border-radius:10px;font-size:15px;font-weight:700;text-align:center;box-sizing:border-box;outline:none;margin-bottom:8px;font-family:inherit" />
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div><label style="font-size:12px;color:#7c8879;display:block;margin-bottom:4px">Birdie 倍率</label><input type="number" id="mpMB" value="2" oninput="mpLobbySync()" style="width:100%;padding:11px;border:2px solid #d6e2d3;border-radius:10px;font-size:15px;font-weight:700;text-align:center;box-sizing:border-box;outline:none;font-family:inherit"/></div>
+          <div><label style="font-size:12px;color:#7c8879;display:block;margin-bottom:4px">4 Par Eagle</label><input type="number" id="mpME4" value="5" oninput="mpLobbySync()" style="width:100%;padding:11px;border:2px solid #d6e2d3;border-radius:10px;font-size:15px;font-weight:700;text-align:center;box-sizing:border-box;outline:none;font-family:inherit"/></div>
+          <div><label style="font-size:12px;color:#7c8879;display:block;margin-bottom:4px">5 Par Eagle</label><input type="number" id="mpME5" value="3" oninput="mpLobbySync()" style="width:100%;padding:11px;border:2px solid #d6e2d3;border-radius:10px;font-size:15px;font-weight:700;text-align:center;box-sizing:border-box;outline:none;font-family:inherit"/></div>
+          <div><label style="font-size:12px;color:#7c8879;display:block;margin-bottom:4px">HIO 倍率</label><input type="number" id="mpMHIO" value="10" oninput="mpLobbySync()" style="width:100%;padding:11px;border:2px solid #d6e2d3;border-radius:10px;font-size:15px;font-weight:700;text-align:center;box-sizing:border-box;outline:none;font-family:inherit"/></div>
+        </div>
       </div>
-      <div class="mode-sub" id="matchSub">
-        <div style="font-size:12px;color:var(--muted);margin-bottom:6px">參與玩家</div>
-        <div class="check-grid" id="matchPlayers"></div>
+
+      <!-- 比賽模式 -->
+      <div class="card" id="mpModeCard" style="margin-bottom:12px">
+        <h2 style="font-size:13px;font-weight:900;color:#1e4d2b;border:none;margin-bottom:12px;display:flex;align-items:center;gap:6px">
+          <span style="width:22px;height:22px;border-radius:50%;background:#2f6b3f;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0">3</span>
+          比賽模式
+        </h2>
+        <div class="mode-stack">
+          <div class="mode-row" id="mpModeRowVegas" onclick="mpToggleMode('Vegas')">
+            <input type="checkbox" id="mpChkVegas" style="pointer-events:none;width:20px;height:20px;flex-shrink:0">
+            <span style="flex:1;font-size:15px;font-weight:900">Vegas</span>
+          </div>
+          <div id="mpVegasSub" style="display:none;padding-left:14px;margin-bottom:6px">
+            <div class="mode-row" id="mpModeRowCarry" onclick="mpToggleMode('Carry')" style="margin-bottom:6px">
+              <input type="checkbox" id="mpChkCarry" style="pointer-events:none;width:20px;height:20px;flex-shrink:0">
+              <span style="font-size:14px;font-weight:900">平手遞延</span>
+            </div>
+          </div>
+          <div class="mode-row" id="mpModeRowMatch" onclick="mpToggleMode('Match')">
+            <input type="checkbox" id="mpChkMatch" style="pointer-events:none;width:20px;height:20px;flex-shrink:0">
+            <span style="flex:1;font-size:15px;font-weight:900">比洞賽</span>
+          </div>
+          <div id="mpMatchSub" style="display:none;padding-left:14px;margin-bottom:6px">
+            <div style="font-size:12px;color:#7c8879;margin-bottom:6px">參與玩家</div>
+            <div id="mpMatchPlayers"></div>
+          </div>
+          <div class="mode-row" id="mpModeRowPar" onclick="mpToggleMode('Par')">
+            <input type="checkbox" id="mpChkPar" style="pointer-events:none;width:20px;height:20px;flex-shrink:0">
+            <span style="flex:1;font-size:15px;font-weight:900">抓PAR</span>
+          </div>
+          <div id="mpParSub" style="display:none;padding-left:14px;margin-bottom:6px">
+            <div style="font-size:12px;color:#7c8879;margin-bottom:6px">參與玩家</div>
+            <div id="mpParPlayers"></div>
+          </div>
+        </div>
       </div>
-      <!-- 抓PAR -->
-      <div class="mode-row" id="modeRowPar" onclick="mpToggleMode('Par')">
-        <input type="checkbox" id="chkPar">
-        <span class="mode-label">抓PAR</span>
+
+      <!-- 讓洞設定 -->
+      <div class="card" id="mpHdcpCard" style="margin-bottom:12px;display:none">
+        <h2 style="font-size:13px;font-weight:900;color:#1e4d2b;border:none;margin-bottom:12px;display:flex;align-items:center;gap:6px">
+          <span style="width:22px;height:22px;border-radius:50%;background:#2f6b3f;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0">4</span>
+          讓洞設定
+        </h2>
+        <div id="mpHdcpMemArea"></div>
+        <div style="font-size:12px;color:#7c8879;line-height:1.6;margin-bottom:10px">
+          一般讓法：輸入讓洞數，系統依 HDCP 決定哪些洞生效。<br>
+          特殊讓法：依 Par 3 / Par 4 / Par 5 分別設定讓洞數。
+        </div>
+        <div id="mpHdcpPairs" style="display:grid;grid-template-columns:1fr 1fr;gap:10px"></div>
       </div>
-      <div class="mode-sub" id="parSub">
-        <div style="font-size:12px;color:var(--muted);margin-bottom:6px">參與玩家</div>
-        <div class="check-grid" id="parPlayers"></div>
+
+      <!-- 開始按鈕 -->
+      <div id="mpLobbyError" style="display:none;background:#fee2e2;border-radius:10px;padding:10px 14px;font-size:13px;color:#b91c1c;margin-bottom:8px"></div>
+      <button id="mpStartBtn" onclick="mpStartGame()" style="display:none;width:100%;min-height:50px;border:none;border-radius:12px;background:linear-gradient(180deg,#2f6b3f,#1e4d2b);color:#fff;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;box-shadow:0 4px 14px rgba(24,49,31,.15);margin-bottom:8px">
+        開始計分 ▶
+      </button>
+      <div style="height:20px"></div>
+    </div>
+  </div>
+
+  <!-- 玩家綁定 -->
+  <div id="mp-pg-bind" style="display:none">
+    <div style="background:rgba(255,255,255,.96);border-bottom:1px solid #d6e2d3;padding:0 16px;height:52px;display:flex;align-items:center;position:sticky;top:0;z-index:10">
+      <div style="font-size:16px;font-weight:900;color:#1e4d2b">👤 你是哪位球員？</div>
+    </div>
+    <div style="padding:14px;max-width:400px;margin:0 auto">
+      <div style="background:#fff;border-radius:14px;border:1px solid #d6e2d3;padding:16px">
+        <div style="font-size:13px;color:#7c8879;margin-bottom:14px">選擇你在這場比賽中的名字</div>
+        <div id="mpBindList"></div>
+        <div style="height:1px;background:#d6e2d3;margin:12px 0"></div>
+        <button onclick="mpBindSkip()" style="width:100%;background:none;border:none;color:#7c8879;font-size:13px;font-weight:900;cursor:pointer;padding:8px;font-family:inherit">直接加入（不選擇）</button>
       </div>
     </div>
+  </div>
 
-    <!-- 讓洞設定 -->
-    <div class="card" id="hdcpCard">
-      <div class="card-title"><span class="num">4</span> 讓洞設定</div>
-      <div id="hdcpMemArea"></div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">
-        一般讓法：輸入讓洞數，系統依 HDCP 決定哪些洞生效。<br>
-        特殊讓法：依 Par 3 / Par 4 / Par 5 分別設定讓洞數。
-      </div>
-      <div id="hdcpPairs"></div>
+  </div><!-- end mp-overlay -->
+
+  <div class="top-floating-bar"><div class="version-badge" id="floatingVersionBadge">Golf Score Beta 1.74</div></div>
+  <div class="tab-nav">
+    <div class="tab-btn-group">
+      <button class="tab-btn active" id="tab-set" onclick="openTab('setting')" style="display:none">⚙️ 設定</button>
+      <button class="tab-btn" id="tab-score" onclick="openTab('scoring')">⛳ 計分</button>
+      <button class="tab-btn" id="tab-res" onclick="calculateFinal()">📊 結算</button>
     </div>
+  </div>
 
-    <!-- 開始按鈕 -->
-    <button class="btn btn-primary" id="startBtn" onclick="mpStartGame()" style="display:none">
-      開始計分 ▶
-    </button>
-    <div style="height:16px"></div>
+  <!-- 設定引導進度條 -->
+  <div class="setup-guide-bar show" id="setupGuideBar">
+    <div class="setup-guide-steps">
+      <div class="setup-step">
+        <button type="button" class="setup-step-btn" id="guideStep1Btn">
+          <span class="setup-step-icon" id="guideStep1Icon">1</span>
+          <span class="setup-step-label" id="guideStep1Label">球場</span>
+        </button>
+      </div>
+      <div class="setup-step">
+        <button type="button" class="setup-step-btn" id="guideStep2Btn">
+          <span class="setup-step-icon" id="guideStep2Icon">2</span>
+          <span class="setup-step-label" id="guideStep2Label">倍率</span>
+        </button>
+      </div>
+      <div class="setup-step">
+        <button type="button" class="setup-step-btn" id="guideStep3Btn">
+          <span class="setup-step-icon" id="guideStep3Icon">3</span>
+          <span class="setup-step-label" id="guideStep3Label">填玩家</span>
+        </button>
+      </div>
+      <div class="setup-step">
+        <button type="button" class="setup-step-btn" id="guideStep4Btn">
+          <span class="setup-step-icon" id="guideStep4Icon">4</span>
+          <span class="setup-step-label" id="guideStep4Label">模式</span>
+        </button>
+      </div>
+      <div class="setup-step">
+        <button type="button" class="setup-step-btn clickable" id="guideStep5Btn" onclick="openTab('scoring')">
+          <span class="setup-step-icon" id="guideStep5Icon">5</span>
+          <span class="setup-step-label cta" id="guideStep5Label">計分 →</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div id="setting" class="content active">
+    <input type="hidden" id="courseName" value="">
+    <div id="global-warning" class="warning-box"></div>
+
+<div class="card">
+  <h2>1. 球場</h2>
+  <div style="display:flex; flex-direction:column; gap:8px;">
+    <div style="display:flex; align-items:center; gap:8px;">
+      <select id="savedCourseSelect" onchange="handleSavedCourseSelect()" style="flex:1;"></select>
+      <div id="startHoleArea18" style="display:flex; align-items:center; gap:6px; flex-shrink:0;">
+        <span style="font-size:.88rem; font-weight:900; color:#7c8879; white-space:nowrap;">起始洞</span>
+        <input type="number" id="startHole" value="1" min="1" max="18" oninput="renderScoreboard()" style="width:52px; min-height:40px; padding:6px 4px; font-size:.96rem; text-align:center; border:2px solid #d2ddd0; border-radius:10px;">
+      </div>
+      <div id="startHoleArea27" style="display:none; align-items:center; gap:6px; flex-shrink:0;">
+        <span style="font-size:.88rem; font-weight:900; color:#7c8879; white-space:nowrap;">起始洞</span>
+        <select id="startZone" onchange="updateStartHole27()" style="min-height:40px; padding:6px 4px; font-size:.88rem; border:2px solid #d2ddd0; border-radius:10px; max-width:80px;"></select>
+        <input type="number" id="startHole27Num" value="1" min="1" max="9" oninput="updateStartHole27()" style="width:44px; min-height:40px; padding:6px 4px; font-size:.96rem; text-align:center; border:2px solid #d2ddd0; border-radius:10px;">
+      </div>
+    </div>
+    <div id="favoriteArea" style="display:none; align-items:center; gap:8px;">
+      <button id="favoriteBtn" onclick="handleFavoriteToggle()" style="font-size:1.4rem; background:none; border:none; cursor:pointer; padding:4px 8px;" title="加入最愛">☆</button>
+      <span id="favoriteLabel" style="font-size:.9rem; color:#7c8879;">我的最愛</span>
+    </div>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+      <button type="button" class="new-game-btn" onclick="showNewCourseDialog('')" style="background:linear-gradient(180deg,#2f6b3f,#1e4d2b);">新增球場</button>
+      <button type="button" class="new-game-btn" onclick="startNewGame()" style="background:linear-gradient(180deg,#2f6b3f,#1e4d2b);">開新球局</button>
+    </div>
+    <div class="small-note" style="margin-top:2px;">球場資料需手動新增，之後可直接從下拉選單選取</div>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+      <button type="button" class="new-game-btn" onclick="triggerImportCoursesJson()" style="background:linear-gradient(180deg,#607d8b,#546e7a);">匯入球場資料</button>
+      <button type="button" class="new-game-btn" onclick="exportCoursesJson()" style="background:linear-gradient(180deg,#607d8b,#546e7a);">匯出球場資料</button>
+    </div>
+    <div class="small-note" style="margin-top:-4px; margin-bottom:4px;">每次新增球場後請立即匯出備份，系統更新可能導致資料遺失</div>
+    </div>
+  </div>
+  <input type="file" id="importCoursesFile" accept="application/json,.json" style="display:none" onchange="importCoursesJson(event)">
+
+<div class="card">
+  <h2>2. 點數 / 倍率</h2>
+  <div style="margin-bottom:12px;">
+    <label><small>點 / 元</small></label>
+    <input type="number" id="pointVal" value="100">
+  </div>
+  <div class="grid-2">
+    <div><label><small>Birdie 倍率</small></label><input type="number" id="mB" value="2"></div>
+    <div><label><small>4 Par Eagle 倍率</small></label><input type="number" id="mE4" value="5"></div>
+    <div><label><small>5 Par Eagle 倍率</small></label><input type="number" id="mE5" value="3"></div>
+    <div><label><small>HIO 倍率</small></label><input type="number" id="mHIO" value="10"></div>
   </div>
 </div>
 
-<!-- ═══ GAME PAGE ═══ -->
-<div class="page" id="page-game">
-  <!-- bottom tabs -->
-  <div class="bottom-tabs show" id="gameTabs">
-    <button class="tab-btn active" id="tabScore" onclick="switchGameTab('score')">
-      <span class="icon">⛳</span>計分
-    </button>
-    <button class="tab-btn" id="tabResult" onclick="switchGameTab('result')">
-      <span class="icon">📊</span>結算
-    </button>
-  </div>
-  <div id="game-bar">
-    <div class="bar-dot"></div>
-    <span class="bar-code" id="barCode"></span>
-    <span class="bar-names" id="barNames"></span>
-    <button class="bar-leave" onclick="mpLeave()">離開</button>
-  </div>
+<div id="player-name-area"></div>
 
-  <!-- 計分 tab -->
-  <div id="gameScore" style="padding-bottom:120px">
-    <div style="background:rgba(255,255,255,.96);border-bottom:1px solid var(--border);padding:10px 14px;position:sticky;top:0;z-index:50">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-        <div style="font-size:13px;color:var(--muted)" id="scoreCourseLabel">-</div>
-        <button onclick="mpShowCourseEdit()" style="background:none;border:none;color:var(--green);font-size:12px;font-weight:900;cursor:pointer">✏️ 編輯球場</button>
-      </div>
-      <!-- Vegas 名次設定（只有 Vegas 模式才顯示） -->
-      <div id="vegasRankBar" style="display:none">
-        <div style="font-size:12px;color:var(--muted);margin-bottom:4px">Vegas 起始洞名次</div>
-        <div id="vegasRankInputs" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+<div class="card">
+  <h2>4. 比賽模式</h2>
+  <div class="mode-stack">
+
+    <!-- Vegas -->
+    <div class="mode-row active" id="modeRowVegas" onclick="toggleMainMode('modeVegas')">
+      <input type="checkbox" id="modeVegas" checked>
+      <span>Vegas</span>
+    </div>
+    <div id="vegasSubArea" class="mode-child-group">
+      <div class="mode-row" id="modeRowExt" onclick="toggleMainMode('extMode')" style="margin-left:18px;">
+        <input type="checkbox" id="extMode">
+        <span>平手遞延</span>
       </div>
     </div>
-    <div style="padding:10px 14px">
-      <div class="table-wrapper" id="scoreboardWrap">
-        <table class="score-table" id="scoreboard">
-          <thead>
-            <tr id="rowH"></tr>
-            <tr id="rowP"></tr>
-            <tr id="rowHd"></tr>
-          </thead>
-          <tbody id="score-body"></tbody>
-        </table>
+
+    <!-- 比洞賽 -->
+    <div class="mode-row active" id="modeRowMatch" onclick="toggleMainMode('modeMatch')">
+      <input type="checkbox" id="modeMatch" checked>
+      <span>比洞賽</span>
+    </div>
+    <div id="matchSubArea" class="mode-child-group">
+      <div class="mode-sub-row mode-sub-collapse" id="modeRowMatchPlayers" onclick="toggleSubCollapse('matchPlayers')">
+        <span>參與玩家</span>
+        <span class="sub-collapse-icon" id="icon-matchPlayers">▶</span>
+      </div>
+      <div id="body-matchPlayers" style="display:none;" class="mode-child">
+        <div id="match-players-area"></div>
+      </div>
+      <div class="mode-sub-row mode-sub-collapse" id="modeRowHandicap" onclick="toggleSubCollapse('handicap')">
+        <span>讓洞設定</span>
+        <span class="sub-collapse-icon" id="icon-handicap">▶</span>
+      </div>
+      <div id="body-handicap" style="display:none;" class="mode-child">
+        <div id="hdcp-memory-toast-area"></div>
+        <div class="small-note" style="padding:10px 14px 4px; color:#7c8879; line-height:1.6;">一般讓法：輸入讓洞數，系統依 HDCP 決定哪些洞生效。<br>特殊讓法：依 Par 3 / Par 4 / Par 5 分別設定讓洞數。</div>
+        <div id="player-config-area"></div>
       </div>
     </div>
-    <div id="scoringWarning" class="warn-box" style="margin:0 14px 10px"></div>
-  </div>
 
-  <!-- 結算 tab -->
-  <div id="gameResult" style="display:none;padding:14px 14px 120px">
-    <div id="resultContent"></div>
-    <button class="btn btn-primary" onclick="mpCalcFinal()">重新計算</button>
+    <!-- 抓PAR -->
+    <div class="mode-row active" id="modeRowPar" onclick="toggleMainMode('modePar')">
+      <input type="checkbox" id="modePar" checked>
+      <span>抓PAR</span>
+    </div>
+    <div id="parSubArea" class="mode-child-group">
+      <div class="mode-sub-row mode-sub-collapse" id="modeRowParPlayers" onclick="toggleSubCollapse('parPlayers')">
+        <span>參與玩家</span>
+        <span class="sub-collapse-icon" id="icon-parPlayers">▶</span>
+      </div>
+      <div id="body-parPlayers" style="display:none;" class="mode-child">
+        <div id="par-players-area"></div>
+      </div>
+    </div>
+
   </div>
 </div>
 
-<!-- ═══ BIND PAGE (球友選擇對應玩家) ═══ -->
-<div class="page" id="page-bind">
-  <div class="topbar">
-    <div class="topbar-title">👤 你是哪位球員？</div>
   </div>
-  <div class="scroll-area">
-    <div class="card">
-      <div style="font-size:13px;color:var(--muted);margin-bottom:14px">選擇你在這場比賽中的名字，之後成績會跟你的帳號連結。</div>
-      <div id="bindList"></div>
-      <div style="margin:12px 0;height:1px;background:var(--border)"></div>
-      <button class="btn btn-ghost" onclick="mpBindSkip()">跳過（只幫忙記分）</button>
+
+  <div id="scoring" class="content">
+    <div id="scoring-warning" class="warning-box"></div>
+    <div id="scoring-danger" class="danger-box"></div>
+    <div class="card" id="course-save-area" style="padding:12px;">
+      <button class="action-btn" id="editCourseBtn" onclick="openCourseEditDialog()" style="width:100%;">編輯球洞資訊</button>
+    </div>
+
+<div id="vegas-rank-area" class="card"></div>
+
+<div class="table-wrapper">
+  <table id="mainTable">
+    <thead>
+      <tr id="rowH"></tr>
+      <tr id="rowP"></tr>
+      <tr id="rowHd"></tr>
+    </thead>
+    <tbody id="playerRows"></tbody>
+  </table>
+</div>
+
+  </div>
+
+  <div id="result" class="content">
+    <div id="result-warning" class="warning-box"></div>
+    <div class="result-grid">
+      <div class="result-stack">
+        <div style="margin-bottom:8px;">
+          <div style="font-size:.94rem; font-weight:900; color:#1e4d2b; margin-bottom:8px; letter-spacing:.02em;">輸出圖片</div>
+          <div class="export-btn-row">
+            <button class="action-btn" type="button" onclick="exportResultPreview('result')">比賽結果</button>
+            <button class="action-btn" type="button" onclick="exportResultPreview('scorecard')">成績卡</button>
+          </div>
+          <div style="margin-top:8px;">
+            <button class="action-btn" type="button" style="width:100%; background:linear-gradient(180deg,#8b4513,#6b3410);" onclick="finishGame()">🏁 比賽結束（儲存讓洞記錄）</button>
+          </div>
+        </div>
+        <div class="final-area jpg-capture" id="result-capture">
+          <h2>💰 總結算</h2>
+          <div id="final-money"></div>
+        </div>
+      </div>
+      <div class="result-stack">
+        <div class="card"><h2>🎯 抓PAR</h2><div id="par-output"></div></div>
+        <div class="card"><h2>🏆 比洞賽</h2><div id="match-output"></div></div>
+        <div class="card result-collapse-card" id="card-match-detail">
+          <div class="result-collapse-head" onclick="toggleResultCollapse('match-detail')">
+            <h2 style="margin:0;">📝 比洞賽每組結果</h2>
+            <span class="result-collapse-icon">▶</span>
+          </div>
+          <div class="result-collapse-body" id="body-match-detail" style="display:none;">
+            <div id="match-detail-output"></div>
+          </div>
+        </div>
+        <div class="card"><h2>🎲 Vegas</h2><div id="vegas-output"></div></div>
+        <div class="card result-collapse-card" id="card-vegas-hole">
+          <div class="result-collapse-head" onclick="toggleResultCollapse('vegas-hole')">
+            <h2 style="margin:0;">📝 Vegas 每洞勝負</h2>
+            <span class="result-collapse-icon">▶</span>
+          </div>
+          <div class="result-collapse-body" id="body-vegas-hole" style="display:none;">
+            <div id="vegas-hole-output"></div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
-</div>
 
-<!-- ═══ 1.74 HIDDEN DOM (計分需要的元素) ═══ -->
-<div id="hidden174" style="display:none">
-  <input type="hidden" id="courseName" value="">
-  <input type="hidden" id="startHole" value="1">
-  <input type="hidden" id="pointVal" value="100">
-  <input type="hidden" id="mB" value="2">
-  <input type="hidden" id="mE4" value="5">
-  <input type="hidden" id="mE5" value="3">
-  <input type="hidden" id="mHIO" value="10">
-  <input type="hidden" id="modeVegas" value="">
-  <input type="checkbox" id="modeVegasCb">
-  <input type="checkbox" id="extMode">
-  <input type="checkbox" id="modeMatch">
-  <input type="checkbox" id="modePar">
-  <div id="name0-wrap"><input type="text" id="name0" value=""></div>
-  <div id="name1-wrap"><input type="text" id="name1" value=""></div>
-  <div id="name2-wrap"><input type="text" id="name2" value=""></div>
-  <div id="name3-wrap"><input type="text" id="name3" value=""></div>
-  <input type="hidden" id="p0_m"><input type="hidden" id="p1_m"><input type="hidden" id="p2_m"><input type="hidden" id="p3_m">
-  <input type="hidden" id="p0_p"><input type="hidden" id="p1_p"><input type="hidden" id="p2_p"><input type="hidden" id="p3_p">
-  <input type="hidden" id="vegasRank0"><input type="hidden" id="vegasRank1"><input type="hidden" id="vegasRank2"><input type="hidden" id="vegasRank3">
-  <div id="player-name-area"></div>
-  <div id="player-config-area"></div>
-  <div id="match-players-area"></div>
-  <div id="par-players-area"></div>
-  <div id="vegas-rank-area"></div>
-  <div id="hdcp-memory-toast-area"></div>
-  <div id="scoring-warning"></div>
-  <div id="global-warning"></div>
-  <select id="savedCourseSelect"></select>
-  <div id="course-save-area"></div>
-  <input type="hidden" id="newCourseNameInput">
-  <input type="hidden" id="newCourseRegionInput">
-</div>
+  <div class="export-preview-overlay" id="exportPreviewOverlay" onclick="closeExportPreview(event)">
+    <div class="export-preview-sheet" onclick="event.stopPropagation()">
+      <div class="export-preview-head">
+        <span id="exportPreviewTitle">長按或下載 PNG</span><div style="display:flex; gap:8px;"><button type="button" class="export-download-btn" onclick="downloadPreviewImage()">下載 PNG</button><button type="button" class="export-preview-close" onclick="closeExportPreview()">✕</button></div>
+      </div>
+      <div class="export-preview-body"><img id="exportPreviewImage" alt="結算圖片預覽"></div>
+    </div>
+  </div>
 
-<!-- 1.74 彈窗 (新增球場、27洞選區) -->
-<div class="zone-select-overlay" id="zoneSelectOverlay">
+  <!-- 編輯球洞資訊彈窗 -->
+
+  <div class="new-course-overlay" id="courseEditOverlay">
+    <div class="new-course-sheet">
+      <div class="new-course-head">
+        <span id="courseEditDialogTitle">編輯球洞資訊</span>
+        <button class="new-course-close-btn" onclick="closeCourseEditDialog()">✕</button>
+      </div>
+      <div class="new-course-body" id="courseEditBody">
+      </div>
+    </div>
+  </div>
+
+  <!-- 新球場彈窗 -->
+
+  <div class="new-course-overlay" id="newCourseOverlay">
+    <div class="new-course-sheet">
+      <div class="new-course-head">
+        <span>新增球場</span>
+        <button class="new-course-close-btn" onclick="closeNewCourseDialog()">✕</button>
+      </div>
+      <div class="new-course-body">
+        <div style="margin-bottom:12px;">
+          <label class="new-course-hole-label" style="margin-bottom:4px;">球場名稱</label>
+          <input type="text" id="newCourseNameInput" class="new-course-input" placeholder="請輸入球場名稱" style="width:100%; min-height:48px; padding:10px 12px; font-size:1rem;">
+        </div>
+        <div style="margin-bottom:12px;">
+          <label class="new-course-hole-label" style="margin-bottom:4px;">地區（選填）</label>
+          <input type="text" id="newCourseRegionInput" class="new-course-input" placeholder="例如：台中、台南" style="width:100%; min-height:48px; padding:10px 12px; font-size:1rem;">
+        </div>
+        <div id="newCourseTypeButtons">
+          <div style="font-size:.94rem; color:#7c8879; margin-bottom:12px;">請選擇球場洞數：</div>
+          <div class="new-course-type-btns">
+            <button class="new-course-type-btn" onclick="selectNewCourseType(18)">⛳ 18 洞</button>
+            <button class="new-course-type-btn" onclick="selectNewCourseType(27)">⛳ 27 洞</button>
+          </div>
+        </div>
+        <div id="newCourseHoleInputArea" style="display:none;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 27洞選區彈窗 -->
+
+  <div class="zone-select-overlay" id="zoneSelectOverlay">
     <div class="zone-select-sheet">
       <div class="zone-select-head">
         <span>選擇今天打哪兩區</span>
@@ -863,16 +1545,15 @@ select.inp { cursor: pointer; }
       </div>
     </div>
   </div>
-<div class="rank-picker-overlay" id="rankPickerOverlay" onclick="closeVegasRankPicker(event)">
+
+  <div class="rank-picker-overlay" id="rankPickerOverlay" onclick="closeVegasRankPicker(event)">
     <div class="rank-picker-sheet" onclick="event.stopPropagation()">
       <div class="rank-picker-title" id="rankPickerTitle">請選擇排名</div>
       <div id="rankPickerOptions"></div>
     </div>
   </div>
 
-<script>
-// ═══ 1.74 CORE SCRIPT ═══
-
+  <script>
     const APP_VERSION = 'Golf Score Beta 1.74';
     const playerIDs = [0,1,2,3];
     const placeholders = ['玩家1','玩家2','玩家3','玩家4'];
@@ -4010,117 +4691,178 @@ select.inp { cursor: pointer; }
       updateSetupGuide();
     }
 
+    // 補丁：collectAppState 加入多人需要的欄位
+    const _origCollect = collectAppState;
+    collectAppState = function() {
+      const s = _origCollect();
+      s.savedCourse = document.getElementById('savedCourseSelect')?.value || '';
+      s.mB = s.multipliers?.mB || document.getElementById('mB')?.value || '2';
+      s.mE4 = s.multipliers?.mE4 || document.getElementById('mE4')?.value || '5';
+      s.mE5 = s.multipliers?.mE5 || document.getElementById('mE5')?.value || '3';
+      s.mHIO = s.multipliers?.mHIO || document.getElementById('mHIO')?.value || '10';
+      s.modeVegas = !!document.getElementById('modeVegas')?.checked;
+      s.extMode = !!document.getElementById('extMode')?.checked;
+      s.modeMatch = !!document.getElementById('modeMatch')?.checked;
+      s.modePar = !!document.getElementById('modePar')?.checked;
+      return s;
+    };
+
     window.onload = () => {
       initUI();
-      restoreAutoSave();
+      // 多人模式：不自動 restoreAutoSave，等 Firebase auth 後決定
+      // restoreAutoSave();
       document.addEventListener('input', scheduleAutoSave, true);
       document.addEventListener('change', scheduleAutoSave, true);
       document.addEventListener('input', updateSetupGuide, true);
       document.addEventListener('change', updateSetupGuide, true);
       updateSetupGuide();
+      // 隱藏 1.74 原本的 tab-set
+      document.getElementById('tab-set').style.display = 'none';
     };
-  
+  </script>
 
-// ═══ MULTI-PLAYER LAYER ═══
-// 覆蓋 openTab 讓 1.74 的函式不影響新 UI
-function openTab(t) {}
-
-</script>
-
+</body>
+</html>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult, signInAnonymously, onAuthStateChanged, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getDatabase, ref, set, get, update, remove, onValue, off } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
+// ── CONFIG ────────────────────────────────────────────────
 const FB = initializeApp({
-  apiKey: "AIzaSyCtZjzSV2hVdlCGLDh1-Z1opaUP9GvTjjk",
-  authDomain: "golf-score-9ae2b.firebaseapp.com",
-  databaseURL: "https://golf-score-9ae2b-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "golf-score-9ae2b",
-  storageBucket: "golf-score-9ae2b.firebasestorage.app",
-  messagingSenderId: "321905525728",
-  appId: "1:321905525728:web:cb75d7f9093fb285e86185"
+  apiKey:"AIzaSyCtZjzSV2hVdlCGLDh1-Z1opaUP9GvTjjk",
+  authDomain:"golf-score-9ae2b.firebaseapp.com",
+  databaseURL:"https://golf-score-9ae2b-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId:"golf-score-9ae2b",
+  storageBucket:"golf-score-9ae2b.firebasestorage.app",
+  messagingSenderId:"321905525728",
+  appId:"1:321905525728:web:cb75d7f9093fb285e86185"
 });
 const auth = getAuth(FB);
 const db = getDatabase(FB);
 
-// ── STATE ────────────────────────────────────────────────
-let mpUser = null, mpGameId = null, mpIsHost = false;
-let mpListener = null, mpSyncTimer = null, mpApplying = false;
+// ── STATE ─────────────────────────────────────────────────
+let mpUser = null;
+let mpGameId = null;
+let mpIsHost = false;
+let mpHostUid = '';
+let mpListener = null;
+let mpSyncTimer = null;
+let mpApplying = false;
 let mpBoundIdx = null;
-let mpSlots = [{name:'',uid:''},{name:'',uid:''},{name:'',uid:''},{name:'',uid:''}];
-let mpDragIdx = null;
+// 玩家槽位（最多4個，有名字+uid的是已綁定，有名字無uid的是手動輸入）
+let mpPlayers = [
+  {name:'',uid:'',photo:''},
+  {name:'',uid:'',photo:''},
+  {name:'',uid:'',photo:''},
+  {name:'',uid:'',photo:''}
+];
 
-// ── INIT ─────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
-  // 初始化 1.74 核心
-  if (typeof initUI === 'function') initUI();
-  // Patch setSavedCourses / setHdcpMemory
-  if (typeof setSavedCourses === 'function' && !setSavedCourses._p) {
-    const o = window.setSavedCourses;
-    window.setSavedCourses = d => { o(d); update(ref(db,'shared'),{courses:d}).catch(()=>{}); };
-    window.setSavedCourses._p = true;
+// ── HELPERS ───────────────────────────────────────────────
+function mpShowPage(page) {
+  ['login','home','lobby','bind'].forEach(p => {
+    const el = document.getElementById(`mp-pg-${p}`);
+    if (el) el.style.display = p === page ? 'block' : 'none';
+  });
+  // 首頁用 flex
+  if (page === 'home') {
+    const el = document.getElementById('mp-pg-home');
+    if (el) el.style.display = 'flex';
   }
-  if (typeof setHdcpMemory === 'function' && !setHdcpMemory._p) {
-    const o = window.setHdcpMemory;
-    window.setHdcpMemory = d => { o(d); update(ref(db,'shared'),{hdcpMemory:d}).catch(()=>{}); };
-    window.setHdcpMemory._p = true;
-  }
-});
+}
 
-// ── AUTH ─────────────────────────────────────────────────
+function mpHideOverlay() {
+  document.getElementById('mp-overlay').style.display = 'none';
+}
+
+function mpShowOverlay(page) {
+  document.getElementById('mp-overlay').style.display = 'block';
+  mpShowPage(page);
+}
+
+let _tt;
+window.mpToast = (msg, dur=3000) => {
+  const t = document.getElementById('mp-toast');
+  if (!t) return;
+  t.textContent = msg;
+  t.style.transform = 'translateX(-50%) translateY(120px)';
+  t.style.opacity = '0';
+  t.style.visibility = 'hidden';
+  void t.offsetHeight;
+  t.style.transform = 'translateX(-50%) translateY(0)';
+  t.style.opacity = '1';
+  t.style.visibility = 'visible';
+  clearTimeout(_tt);
+  _tt = setTimeout(() => {
+    t.style.transform = 'translateX(-50%) translateY(120px)';
+    t.style.opacity = '0';
+    t.style.visibility = 'hidden';
+  }, dur);
+};
+
+function mpShowErr(id, msg) {
+  const e = document.getElementById(id);
+  if (e) { e.style.display='block'; e.textContent=msg; }
+}
+function mpHideErr(id) {
+  const e = document.getElementById(id);
+  if (e) e.style.display='none';
+}
+
+// ── AUTH ──────────────────────────────────────────────────
 onAuthStateChanged(auth, async user => {
   if (user) {
     mpUser = user;
-    const name = (user.displayName||'球友').split(' ')[0];
-    const el = document.getElementById('homeName');
-    if (el) el.textContent = name + '，您好！';
-    try { await getRedirectResult(auth); } catch(e){}
+    const el = document.getElementById('mpHomeName');
+    if (el) el.textContent = (user.displayName||'球友').split(' ')[0] + '，您好！';
+    try { await getRedirectResult(auth); } catch(e) {}
     await mpLoadShared();
-    // 重新整理後恢復房間
-    const savedGameId = sessionStorage.getItem('mpGameId');
-    const savedIsHost = sessionStorage.getItem('mpIsHost') === '1';
-    if (savedGameId) {
-      const snap = await get(ref(db,`games/${savedGameId}`));
-      if (snap.exists()) {
-        const game = snap.val();
-        // 確認還在 players 裡
-        if (game.players?.[mpUser.uid]) {
-          mpGameId = savedGameId; mpIsHost = savedIsHost;
-          if (game.status === 'playing') mpEnterGame(savedGameId, game);
-          else mpEnterLobby(savedGameId);
-          return;
-        }
+    // 嘗試恢復上次球局
+    const savedId = sessionStorage.getItem('mpGameId');
+    const savedHost = sessionStorage.getItem('mpIsHost') === '1';
+    if (savedId) {
+      const snap = await get(ref(db,`games/${savedId}`));
+      if (snap.exists() && snap.val().players?.[mpUser.uid]) {
+        mpGameId = savedId; mpIsHost = savedHost;
+        mpHostUid = snap.val().hostUid || '';
+        if (snap.val().status === 'playing') mpEnterGame(savedId, snap.val());
+        else mpEnterLobby(savedId);
+        return;
       }
       sessionStorage.removeItem('mpGameId');
       sessionStorage.removeItem('mpIsHost');
     }
-    showPage('page-home');
+    mpShowOverlay('home');
   } else {
     mpUser = null;
-    showPage('page-login');
+    mpShowOverlay('login');
   }
 });
 
 window.mpGoogleLogin = async () => {
-  hideErr('loginErr');
+  mpHideErr('mpLoginErr');
   try { await signInWithRedirect(auth, new GoogleAuthProvider()); }
-  catch(e) { showErr('loginErr', '登入失敗：' + e.message); }
+  catch(e) { mpShowErr('mpLoginErr','登入失敗：'+e.message); }
 };
 
 window.mpAnonLogin = async () => {
-  const name = document.getElementById('anonName').value.trim();
-  if (!name) { showErr('loginErr', '請輸入暱稱'); return; }
+  const name = document.getElementById('mpAnonName').value.trim();
+  if (!name) { mpShowErr('mpLoginErr','請輸入暱稱'); return; }
   try {
     const c = await signInAnonymously(auth);
-    await updateProfile(c.user, { displayName: name });
+    await updateProfile(c.user,{displayName:name});
     mpUser = c.user; mpUser.displayName = name;
-  } catch(e) { showErr('loginErr', '登入失敗：' + e.message); }
+  } catch(e) { mpShowErr('mpLoginErr','登入失敗：'+e.message); }
 };
 
 window.mpLogout = async () => {
   await mpLeave();
   await signOut(auth);
+};
+
+window.mpShowJoin = () => {
+  const a = document.getElementById('mpJoinArea');
+  if (a) a.style.display = a.style.display==='none' ? 'block' : 'none';
 };
 
 // ── SHARED DATA ───────────────────────────────────────────
@@ -4137,559 +4879,559 @@ async function mpLoadShared() {
       const loc = JSON.parse(localStorage.getItem('golfHdcpMemoryV1')||'{}');
       localStorage.setItem('golfHdcpMemoryV1', JSON.stringify({...loc,...d.hdcpMemory}));
     }
-  } catch(e){}
+  } catch(e) {}
 }
 
-// ── CREATE ────────────────────────────────────────────────
+// Patch setSavedCourses/setHdcpMemory 同步到 Firebase
+setTimeout(() => {
+  if (typeof setSavedCourses==='function' && !setSavedCourses._mp) {
+    const o=window.setSavedCourses;
+    window.setSavedCourses = d=>{o(d);update(ref(db,'shared'),{courses:d}).catch(()=>{});};
+    window.setSavedCourses._mp=true;
+    mpFillCourseSelect();
+  }
+  if (typeof setHdcpMemory==='function' && !setHdcpMemory._mp) {
+    const o=window.setHdcpMemory;
+    window.setHdcpMemory = d=>{o(d);update(ref(db,'shared'),{hdcpMemory:d}).catch(()=>{});};
+    window.setHdcpMemory._mp=true;
+  }
+}, 500);
+
+// ── CREATE GAME ───────────────────────────────────────────
 window.mpCreateGame = async () => {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  const mk = () => Array.from({length:4},()=>chars[Math.floor(Math.random()*chars.length)]).join('');
-  let code = mk();
-  if ((await get(ref(db,`games/${code}`))).exists()) code = mk();
-  await set(ref(db,`games/${code}`), {
-    code, hostUid: mpUser.uid, status:'lobby', createdAt: Date.now(),
-    players: { [mpUser.uid]: { name: mpUser.displayName||'球友', photo: mpUser.photoURL||'', isHost:true, joinedAt:Date.now() } },
-    lobby: null
-  });
-  mpGameId = code; mpIsHost = true;
+  const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const mk=()=>Array.from({length:4},()=>chars[Math.floor(Math.random()*chars.length)]).join('');
+  let code=mk();
+  if((await get(ref(db,`games/${code}`))).exists()) code=mk();
+
+  // 清空所有資料（等同於開新球局）
+  if (typeof clearCurrentRoundData==='function') clearCurrentRoundData(false);
+  localStorage.removeItem('golfAutoSaveBeta15');
+  mpPlayers = [{name:'',uid:''},{name:'',uid:''},{name:'',uid:''},{name:'',uid:''}];
   mpBoundIdx = null;
-  mpSlots = [{name:'',uid:''},{name:'',uid:''},{name:'',uid:''},{name:'',uid:''}];
-  sessionStorage.setItem('mpGameId', code);
-  sessionStorage.setItem('mpIsHost', '1');
+
+  await set(ref(db,`games/${code}`),{
+    code, hostUid:mpUser.uid, status:'lobby', createdAt:Date.now(),
+    players:{[mpUser.uid]:{name:mpUser.displayName||'球友',photo:mpUser.photoURL||'',isHost:true,joinedAt:Date.now()}},
+    lobby:null
+  });
+  mpGameId=code; mpIsHost=true; mpHostUid=mpUser.uid;
+  sessionStorage.setItem('mpGameId',code);
+  sessionStorage.setItem('mpIsHost','1');
   mpEnterLobby(code);
 };
 
-// ── JOIN ──────────────────────────────────────────────────
+// ── JOIN GAME ─────────────────────────────────────────────
 window.mpJoinGame = async () => {
-  const code = document.getElementById('joinCode').value.trim().toUpperCase();
-  if (code.length !== 4) { showErr('joinErr','請輸入 4 碼房間碼'); return; }
-  const snap = await get(ref(db,`games/${code}`));
-  if (!snap.exists()) { showErr('joinErr','找不到球局'); return; }
-  const game = snap.val();
-  if (game.status === 'finished') { showErr('joinErr','球局已結束'); return; }
-  const pc = Object.keys(game.players||{}).length;
-  if (pc >= 4 && !game.players?.[mpUser.uid]) { showErr('joinErr','球局已滿'); return; }
-  await update(ref(db,`games/${code}/players/${mpUser.uid}`), {
-    name: mpUser.displayName||'球友', photo: mpUser.photoURL||'', isHost:false, joinedAt:Date.now()
+  const code=document.getElementById('mpJoinCode').value.trim().toUpperCase();
+  if(code.length!==4){mpShowErr('mpJoinErr','請輸入 4 碼房間碼');return;}
+  const snap=await get(ref(db,`games/${code}`));
+  if(!snap.exists()){mpShowErr('mpJoinErr','找不到球局');return;}
+  const game=snap.val();
+  if(game.status==='finished'){mpShowErr('mpJoinErr','球局已結束');return;}
+  const pc=Object.keys(game.players||{}).length;
+  if(pc>=4&&!game.players?.[mpUser.uid]){mpShowErr('mpJoinErr','球局已滿');return;}
+
+  await update(ref(db,`games/${code}/players/${mpUser.uid}`),{
+    name:mpUser.displayName||'球友',photo:mpUser.photoURL||'',isHost:false,joinedAt:Date.now()
   });
-  mpGameId = code; mpIsHost = false;
-  // 加入新球局完全重置
-  mpSlots = [{name:'',uid:''},{name:'',uid:''},{name:'',uid:''},{name:'',uid:''}];
-  mpBoundIdx = null;
-  sessionStorage.setItem('mpGameId', code);
-  sessionStorage.setItem('mpIsHost', '0');
-  if (game.status === 'playing') {
-    mpEnterGame(code, game);
+  mpGameId=code; mpIsHost=false; mpHostUid=game.hostUid||'';
+  mpPlayers=[{name:'',uid:''},{name:'',uid:''},{name:'',uid:''},{name:'',uid:''}];
+  sessionStorage.setItem('mpGameId',code);
+  sessionStorage.setItem('mpIsHost','0');
+
+  if(game.status==='playing'){
+    // 球局已開始：先看是否需要選名字，再進計分
+    mpCheckBind(game, true);
   } else {
-    mpEnterLobby(code);
-    // 訪客：讀取一次 slots，找出主持人手動輸入但還沒綁定訪客的名字
-    if (!mpIsHost) {
-      const gameSnap = await get(ref(db,`games/${code}`));
-      if (gameSnap.exists()) {
-        const g = gameSnap.val();
-        const hostUid = g.hostUid;
-        const slots = g.lobby?.slots || [];
-        // 手動輸入的條件：有名字、沒有 uid（或 uid 是空字串）、不是主持人 uid
-        const manualSlots = slots.filter(s =>
-          s.name?.trim() && (!s.uid || s.uid === '')
-        );
-        if (manualSlots.length > 0) {
-          mpShowBind(slots, hostUid);
-        }
-      }
-    }
+    // 等待室：先看是否需要選名字，再進等待室
+    mpCheckBind(game, false);
+  }
+};
+
+// ── CHECK BIND ────────────────────────────────────────────
+// 判斷是否需要顯示名字選擇畫面
+function mpCheckBind(game, goToGame) {
+  const slots = mpSlotsFromGame(game);
+  const hostUid = game.hostUid || '';
+  // 找出手動輸入（有名字、無uid、不是主持人slot）
+  const available = slots.filter(s =>
+    s.name?.trim() && (!s.uid || s.uid==='') && s.uid!==hostUid
+  );
+  if (available.length > 0) {
+    mpShowBind(slots, hostUid, goToGame);
+  } else {
+    if (goToGame) mpEnterGame(mpGameId, game);
+    else mpEnterLobby(mpGameId);
+  }
+}
+
+function mpSlotsFromGame(game) {
+  const raw = game.lobby?.slots;
+  if (!raw) return [{name:'',uid:''},{name:'',uid:''},{name:'',uid:''},{name:'',uid:''}];
+  const arr = Array.isArray(raw) ? raw : Object.values(raw);
+  return Array.from({length:4},(_,i)=>arr[i]?{...arr[i]}:{name:'',uid:''});
+}
+
+// ── SHOW BIND ─────────────────────────────────────────────
+function mpShowBind(slots, hostUid, goToGame) {
+  // 只顯示有名字且無uid的（手動輸入、未被其他訪客綁定）
+  const available = slots.map((s,i)=>({...s,i})).filter(s =>
+    s.name?.trim() && (!s.uid||s.uid==='') && s.uid!==hostUid
+  );
+  if (available.length===0) {
+    if (goToGame) mpEnterGame(mpGameId, null);
+    else mpEnterLobby(mpGameId);
+    return;
+  }
+  document.getElementById('mpBindList').innerHTML = available.map(s=>`
+    <button onclick="mpBind(${s.i},${goToGame})" style="
+      display:flex;align-items:center;gap:12px;
+      width:100%;padding:12px 14px;margin-bottom:8px;
+      background:#fff;border:2px solid #d6e2d3;border-radius:12px;
+      font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;color:#18311f;
+    ">
+      <div style="width:36px;height:36px;border-radius:50%;background:#2f6b3f;color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;flex-shrink:0">${s.name[0]}</div>
+      ${s.name}
+    </button>`).join('');
+  // 更新 skipBtn 的 goToGame 參數
+  document.getElementById('mpBindSkipGoToGame').value = goToGame ? '1' : '0';
+  mpShowOverlay('bind');
+}
+
+window.mpBind = async (idx, goToGame) => {
+  mpBoundIdx = idx;
+  if (mpGameId && mpUser.displayName) {
+    await update(ref(db,`games/${mpGameId}/lobby/slots/${idx}`),{name:mpUser.displayName,uid:mpUser.uid});
+    const el = document.getElementById(`name${idx}`);
+    if (el) { el.value=mpUser.displayName; el.dispatchEvent(new Event('input',{bubbles:true})); }
+  }
+  mpToast(`✅ 已綁定為玩家${idx+1}：${mpUser.displayName}`);
+  if (goToGame) {
+    const snap = await get(ref(db,`games/${mpGameId}`));
+    mpEnterGame(mpGameId, snap.exists()?snap.val():null);
+  } else {
+    mpEnterLobby(mpGameId);
+  }
+};
+
+window.mpBindSkip = async () => {
+  const goToGame = document.getElementById('mpBindSkipGoToGame')?.value === '1';
+  mpBoundIdx = null;
+  if (goToGame) {
+    const snap = await get(ref(db,`games/${mpGameId}`));
+    mpEnterGame(mpGameId, snap.exists()?snap.val():null);
+  } else {
+    mpEnterLobby(mpGameId);
   }
 };
 
 // ── LOBBY ─────────────────────────────────────────────────
 function mpEnterLobby(code) {
-  document.getElementById('lobbyCode').textContent = code;
+  mpHideOverlay();
+  mpShowOverlay('lobby');
+  document.getElementById('mpRoomCode').textContent = code;
   mpFillCourseSelect();
-  mpRenderSlots();
-  mpSetHostOnly(mpIsHost);
-  showPage('page-lobby');
+  mpSetLobbyPermissions();
 
-  if (mpListener) { off(ref(db,`games/${mpGameId}`)); mpListener = null; }
+  if (mpListener) { off(ref(db,`games/${mpGameId}`)); mpListener=null; }
   mpListener = onValue(ref(db,`games/${code}`), snap => {
-    if (!snap.exists()) { showPage('page-home'); return; }
+    if (!snap.exists()) { mpShowOverlay('home'); return; }
     const g = snap.val();
     const players = Object.entries(g.players||{});
+    mpPlayers = mpSlotsFromGame(g);
 
     // 更新球友列表
-    document.getElementById('lobbyCount').textContent = players.length;
-    document.getElementById('lobbyPlayers').innerHTML = players.map(([uid,p]) => `
-      <div class="player-row">
-        <div class="avatar">${p.photo?`<img src="${p.photo}"/>`:(p.name||'?')[0]}</div>
-        <div style="flex:1;font-size:14px">${p.name}</div>
-        ${p.isHost?'<span class="badge badge-host">主持人</span>':''}
-        ${uid===mpUser.uid?'<span class="badge badge-you">我</span>':''}
-      </div>`).join('');
+    mpRenderPlayerList(players, g);
 
-    // 如果有 lobby.slots，以它為主（主持人設定的順序）
-    if (g.lobby?.slots && !mpApplying) {
-      const rawSlots = Array.isArray(g.lobby.slots) ? g.lobby.slots : Object.values(g.lobby.slots);
-      rawSlots.forEach((s, i) => {
-        if (!s) return;
-        if (s.uid) {
-          const p = g.players?.[s.uid];
-          if (p) mpSlots[i] = { name: p.name, uid: s.uid, photo: p.photo||'' };
-          else mpSlots[i] = { name: s.name||'', uid: s.uid, photo: s.photo||'' };
-        } else if (s.name) {
-          mpSlots[i] = { name: s.name, uid: '', photo: '' };
-        }
-      });
-    } else {
-      // 沒有 lobby.slots，新加入的人填入空槽
-      players.forEach(([uid,p]) => {
-        if (!mpSlots.find(s=>s.uid===uid)) {
-          const empty = mpSlots.findIndex(s=>!s.uid);
-          if (empty>=0) mpSlots[empty]={name:p.name,uid,photo:p.photo||''};
-        }
-      });
+    // 套用 lobby 設定（不在輸入中才套用）
+    const focusId = document.activeElement?.id;
+    if (g.lobby && !mpApplying && !focusId?.startsWith('mpNameInp')) {
+      mpApplyLobby(g.lobby);
     }
-    // 只有不在 slot 輸入格時才重渲
-    const _focusId = document.activeElement?.id;
-    if (!_focusId?.startsWith('slotInp')) mpRenderSlots();
-
-    // 套用 lobby 設定（輸入中也跳過）
-    if (g.lobby && !mpApplying && !_focusId?.startsWith('slotInp')) mpApplyLobby(g.lobby);
 
     // 開始按鈕
-    const btn = document.getElementById('startBtn');
+    const btn = document.getElementById('mpStartBtn');
     if (btn) {
       btn.style.display = mpIsHost ? 'flex' : 'none';
       if (mpIsHost) btn.textContent = `開始計分 ▶（${players.length} 人）`;
     }
+
     if (g.status==='playing') {
-      // 重新讀完整 game 確保有最新 lobby
-      get(ref(db,`games/${code}`)).then(snap => {
-        if (snap.exists()) mpEnterGame(code, snap.val());
+      // 等待室→計分：重新讀完整資料
+      get(ref(db,`games/${code}`)).then(s=>{
+        if(s.exists()) mpEnterGame(code,s.val());
       });
     }
   });
 }
 
 function mpFillCourseSelect() {
-  const sel = document.getElementById('loopCourse');
+  const sel = document.getElementById('mpCourse');
   if (!sel) return;
   const courses = JSON.parse(localStorage.getItem('golfSavedCoursesV21')||'{}');
   sel.innerHTML = '<option value="">請選擇球場</option>' +
     Object.entries(courses).map(([k,v])=>`<option value="${k}">${v.name||k}</option>`).join('');
 }
 
-function mpSetHostOnly(isHost) {
-  ['loopCourse','loopStart','loopPtVal','loopMB','loopME4','loopME5','loopMHIO',
-   'modeRowVegas','modeRowMatch','modeRowPar','modeRowCarry'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) { el.style.opacity=isHost?'':'0.6'; el.style.pointerEvents=isHost?'':'none'; }
+function mpSetLobbyPermissions() {
+  // 主持人才能改球場/倍率/比賽模式
+  const hostIds=['mpCourse','mpStartHole','mpPtVal','mpMB','mpME4','mpME5','mpMHIO',
+    'mpModeRowVegas','mpModeRowMatch','mpModeRowPar','mpModeRowCarry'];
+  hostIds.forEach(id=>{
+    const el=document.getElementById(id);
+    if(el){el.style.opacity=mpIsHost?'':'0.6';el.style.pointerEvents=mpIsHost?'':'none';}
   });
-  // host-only 元素
-  document.querySelectorAll('.host-only').forEach(el => {
-    el.style.display = isHost ? '' : 'none';
-  });
+  // 新增球場只有主持人
+  const nb=document.getElementById('mpNewCourseWrap');
+  if(nb) nb.style.display=mpIsHost?'':'none';
 }
 
-// ── SLOTS ─────────────────────────────────────────────────
-function mpRenderSlots() {
-  const el = document.getElementById('slotsArea');
+function mpRenderPlayerList(players, game) {
+  const slots = mpSlotsFromGame(game);
+  const el = document.getElementById('mpPlayerList');
   if (!el) return;
-  el.innerHTML = mpSlots.map((s,i) => `
-    <div class="drop-zone" id="dz${i}"></div>
-    <div class="slot-row" id="slot${i}" draggable="true"
-      ondragstart="mpDS(event,${i})" ondragover="mpDO(event,${i})"
-      ondrop="mpDP(event,${i})" ondragleave="mpDL(event,${i})">
-      <div class="drag-handle">⋮⋮</div>
-      <div class="slot-num">玩家${i+1}</div>
-      ${s.uid
-        ? `<div class="avatar">${s.photo?`<img src="${s.photo}"/>`:(s.name||'?')[0]}</div>
-           <div style="flex:1;font-size:14px">${s.name}</div>
-           ${mpIsHost?`<button onclick="mpClearSlot(${i})" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:4px 8px">✕</button>`:''}`
-        : `<input class="inp" style="flex:1;margin:0" placeholder="輸入球友名字"
-             value="${s.name}" id="slotInp${i}"
-             oninput="mpSlotNameInput(${i},this)"
-             onblur="mpSlotName(${i},this.value)"
-             oncompositionstart="this._composing=true"
-             oncompositionend="this._composing=false;mpSlotName(${i},this.value)"
-             ${!mpIsHost?'readonly':''} />`
-      }
-    </div>`).join('');
+
+  let html = '';
+  // 顯示4個槽位
+  for (let i=0; i<4; i++) {
+    const s = slots[i];
+    const isHost = s.uid === mpHostUid;
+    const hasPlayer = s.uid && players.find(([uid])=>uid===s.uid);
+
+    if (hasPlayer || (s.uid && s.uid!=='')) {
+      // 有綁定的玩家
+      html += `<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #eef4ec">
+        <div style="width:36px;height:36px;border-radius:50%;background:#2f6b3f;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:14px;flex-shrink:0">${(s.name||'?')[0]}</div>
+        <div style="flex:1;font-size:14px;font-weight:700">${s.name}</div>
+        ${isHost?'<span style="font-size:11px;padding:2px 8px;border-radius:20px;background:#c6a15b;color:#1e4d2b;font-weight:900">主持人</span>':''}
+        ${s.uid===mpUser?.uid?'<span style="font-size:11px;padding:2px 8px;border-radius:20px;background:#2f6b3f;color:#fff;font-weight:900">我</span>':''}
+      </div>`;
+    } else if (mpIsHost) {
+      // 空槽：主持人可以手動輸入
+      html += `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #eef4ec">
+        <div style="width:36px;height:36px;border-radius:50%;background:#e8f0e6;color:#7c8879;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">${i+1}</div>
+        <input id="mpNameInp${i}" value="${s.name||''}"
+          placeholder="輸入球友名字（選填）"
+          oninput="if(!this._comp)mpNameInput(${i},this.value)"
+          onblur="mpNameInput(${i},this.value)"
+          oncompositionstart="this._comp=true"
+          oncompositionend="this._comp=false;mpNameInput(${i},this.value)"
+          style="flex:1;padding:9px 12px;border:2px solid #d6e2d3;border-radius:10px;font-size:14px;font-weight:700;outline:none;font-family:inherit;background:#fff" />
+        ${s.name?`<button onclick="mpClearName(${i})" style="background:none;border:none;color:#aaa;cursor:pointer;font-size:14px;padding:4px 6px">✕</button>`:''}
+      </div>`;
+    } else if (s.name) {
+      // 有手動輸入名字但無 uid（訪客看到，但不能改）
+      html += `<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #eef4ec">
+        <div style="width:36px;height:36px;border-radius:50%;background:#e8f0e6;color:#7c8879;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">${i+1}</div>
+        <div style="flex:1;font-size:14px;font-weight:700;color:#7c8879">${s.name}</div>
+        <span style="font-size:11px;color:#aaa">等待加入</span>
+      </div>`;
+    }
+  }
+  el.innerHTML = html;
+  document.getElementById('mpPlayerCount').textContent = players.length;
+
+  // 更新讓洞設定（名字變了就更新）
   mpUpdateHdcp();
   mpUpdateModePlayers();
-  mpUpdateVegasRanks();
 }
 
-window.mpDS = (e,i) => { mpDragIdx=i; document.getElementById(`slot${i}`).classList.add('dragging'); };
-window.mpDO = (e,i) => { e.preventDefault(); document.getElementById(`dz${i}`).classList.add('show'); };
-window.mpDL = (e,i) => { document.getElementById(`dz${i}`).classList.remove('show'); };
-window.mpDP = (e,i) => {
-  e.preventDefault();
-  document.getElementById(`dz${i}`).classList.remove('show');
-  if (mpDragIdx===null||mpDragIdx===i) return;
-  const tmp=mpSlots[mpDragIdx]; mpSlots[mpDragIdx]=mpSlots[i]; mpSlots[i]=tmp;
-  document.getElementById(`slot${mpDragIdx}`)?.classList.remove('dragging');
-  mpDragIdx=null;
-  mpRenderSlots(); mpLobbySync();
-};
-window.mpClearSlot = i => { mpSlots[i]={name:'',uid:''}; mpRenderSlots(); mpLobbySync(); };
-let _slotSyncTimer = null;
-window.mpSlotNameInput = (i, el) => {
-  if (el._composing) return; // 注音輸入中不觸發
-  mpSlots[i].name = el.value;
-  // 只更新讓洞和模式，不重渲 slots（避免 focus 跳走）
+let _nameSyncTimer = null;
+window.mpNameInput = (i, val) => {
+  mpPlayers[i] = {...mpPlayers[i], name: val, uid: ''};
   mpUpdateHdcp();
   mpUpdateModePlayers();
-  // debounce 同步到 Firebase
-  clearTimeout(_slotSyncTimer);
-  _slotSyncTimer = setTimeout(() => {
-    mpApplying = true; // 阻止 onValue 觸發重渲
-    mpLobbySync();
-    setTimeout(() => { mpApplying = false; }, 500);
+  clearTimeout(_nameSyncTimer);
+  _nameSyncTimer = setTimeout(() => {
+    if (!mpGameId || !mpIsHost) return;
+    const lobby = mpCollectLobby();
+    mpApplying = true;
+    update(ref(db,`games/${mpGameId}`),{lobby}).catch(()=>{});
+    setTimeout(()=>{mpApplying=false;}, 600);
   }, 800);
 };
-window.mpSlotName = (i,v) => {
-  mpSlots[i].name=v;
-  mpUpdateHdcp(); mpUpdateModePlayers();
-  mpApplying = true;
-  mpLobbySync();
-  setTimeout(() => { mpApplying = false; }, 500);
-};
 
-function getSlotNames() { return mpSlots.map(s=>s.name?.trim()||''); }
+window.mpClearName = i => {
+  mpPlayers[i] = {name:'',uid:''};
+  mpUpdateHdcp();
+  mpUpdateModePlayers();
+  mpLobbySync();
+};
 
 // ── MODE TOGGLES ──────────────────────────────────────────
 window.mpToggleMode = mode => {
   if (!mpIsHost) return;
-  // Vegas 需要4個玩家
-  if (mode === 'Vegas') {
-    const filledCount = mpSlots.filter(s=>s.name?.trim()).length;
-    if (filledCount < 4 && !document.getElementById('chkVegas')?.checked) {
-      toast('⚠️ Vegas 需要 4 位玩家才能開啟'); return;
+  if (mode==='Vegas') {
+    const filled = mpPlayers.filter(p=>p.name?.trim()).length;
+    if (filled<4 && !document.getElementById('mpChkVegas')?.checked) {
+      mpToast('⚠️ Vegas 需要 4 位玩家才能開啟'); return;
     }
   }
-  const cb=document.getElementById(`chk${mode}`);
-  const row=document.getElementById(`modeRow${mode}`);
-  const sub=document.getElementById(`${mode.toLowerCase()}Sub`);
+  const cb=document.getElementById(`mpChk${mode}`);
+  const row=document.getElementById(`mpModeRow${mode}`);
+  const sub=document.getElementById(`mp${mode}Sub`);
   if(!cb) return;
   cb.checked=!cb.checked;
-  row?.classList.toggle('on',cb.checked);
+  row?.classList.toggle('active',cb.checked);
   if(sub) sub.style.display=cb.checked?'block':'none';
+  // 讓洞只在有比洞賽時顯示
+  const hCard=document.getElementById('mpHdcpCard');
+  if(hCard) hCard.style.display=document.getElementById('mpChkMatch')?.checked?'block':'none';
   mpUpdateModePlayers();
   mpUpdateHdcp();
   mpLobbySync();
 };
 
 function mpUpdateModePlayers() {
-  const names = getSlotNames();
-  ['match','par'].forEach(mode => {
-    const area = document.getElementById(`${mode}Players`);
-    if (!area) return;
-    area.innerHTML = names.map((n,i) => {
-      if (!n) return '';
-      const id = `chkPlayer_${mode}_${i}`;
-      return `<div class="check-item on" id="box_${id}" onclick="mpTogglePlayer('${mode}',${i})">
-        <input type="checkbox" id="${id}" checked style="pointer-events:none">${n}
+  const names = mpPlayers.map(p=>p.name?.trim()||'');
+  ['match','par'].forEach(mode=>{
+    const area=document.getElementById(`mp${mode.charAt(0).toUpperCase()+mode.slice(1)}Players`);
+    if(!area) return;
+    area.innerHTML = names.map((n,i)=>{
+      if(!n) return '';
+      return `<div class="check-item active" id="mpBox_${mode}_${i}" onclick="mpTogglePlayer('${mode}',${i})">
+        <input type="checkbox" id="mpChkP_${mode}_${i}" checked style="pointer-events:none">${n}
       </div>`;
     }).join('');
   });
 }
 
 window.mpTogglePlayer = (mode,i) => {
-  if (!mpIsHost) return;
-  const cb=document.getElementById(`chkPlayer_${mode}_${i}`);
-  const box=document.getElementById(`box_chkPlayer_${mode}_${i}`);
-  if(!cb) return;
-  cb.checked=!cb.checked;
-  box?.classList.toggle('on',cb.checked);
+  if(!mpIsHost) return;
+  const cb=document.getElementById(`mpChkP_${mode}_${i}`);
+  const box=document.getElementById(`mpBox_${mode}_${i}`);
+  if(cb){cb.checked=!cb.checked;box?.classList.toggle('active',cb.checked);}
   mpLobbySync();
 };
 
-function mpUpdateVegasRanks() {
-  const area = document.getElementById('vegasRankArea');
-  if (!area) return;
-  const names = getSlotNames().filter(n=>n);
-  if (names.length===0) { area.innerHTML=''; return; }
-  area.innerHTML = `<div style="display:flex;gap:8px;flex-wrap:wrap">` +
-    mpSlots.map((s,i) => {
-      if (!s.name?.trim()) return '';
-      return `<div style="display:flex;align-items:center;gap:6px;background:white;border:1.5px solid var(--border);border-radius:8px;padding:6px 10px">
-        <span style="font-size:13px">${s.name}</span>
-        <select id="vegRank${i}" style="border:none;outline:none;font-size:13px;font-weight:900;color:var(--green);background:transparent;-webkit-appearance:none;cursor:pointer" onchange="mpLobbySync()">
-          ${['','1','2','3','4'].map(v=>`<option value="${v}">${v||'-'}</option>`).join('')}
-        </select>
-      </div>`;
-    }).join('') + '</div>';
-}
-
 // ── HDCP PAIRS ────────────────────────────────────────────
 function mpUpdateHdcp() {
-  const area = document.getElementById('hdcpPairs');
-  const memArea = document.getElementById('hdcpMemArea');
-  if (!area) return;
-  const names = getSlotNames();
-  const hdcpMem = typeof getHdcpMemory==='function' ? getHdcpMemory() : {};
-  const myName = mpUser?.displayName;
+  const area=document.getElementById('mpHdcpPairs');
+  const memArea=document.getElementById('mpHdcpMemArea');
+  if(!area) return;
+  const names=mpPlayers.map(p=>p.name?.trim()||'');
+  const myName=mpUser?.displayName||'';
+  const hdcpMem=typeof getHdcpMemory==='function'?getHdcpMemory():{};
 
-  // 讓洞記憶提醒（只顯示兩個玩家都在場的配對）
-  const memItems = [];
-  for (let a=0;a<4;a++) for (let b=a+1;b<4;b++) {
-    if (!names[a]||!names[b]) continue;
-    const hk=[names[a],names[b]].sort().join('|');
-    if (hdcpMem[hk]) {
-      const m=hdcpMem[hk];
-      // 顯示方向：newStrokes > 0 表示 nameA讓nameB，< 0 表示 nameB讓nameA
-      const n = m.newStrokes;
-      const giver = n >= 0 ? m.nameA : m.nameB;
-      const receiver = n >= 0 ? m.nameB : m.nameA;
-      const abs = Math.abs(n);
-      memItems.push(`${m.date} ${m.course} ｜ ${giver} 讓 ${receiver} ${abs} 洞`);
-    }
-  }
-  if (memArea) memArea.innerHTML = memItems.length>0 ? `
-    <div class="hdcp-badge">
-      <div class="hdcp-badge-title">⚠️ 讓洞記錄提醒</div>
-      ${memItems.map(m=>`<div>${m}</div>`).join('')}
-    </div>` : '';
-
-  // 取得有名字的玩家
-  const activePairs = [];
-  for (let a=0;a<4;a++) for (let b=a+1;b<4;b++) {
-    if (names[a]&&names[b]) activePairs.push({a,b,nA:names[a],nB:names[b]});
-  }
-
-  if (activePairs.length===0) {
-    area.innerHTML='<div style="font-size:12px;color:var(--muted)">請先填入玩家名字</div>';
-    return;
-  }
-
-  // 照 1.74 的 2 欄 card 排列，每個玩家一個 card
-  const activePlayerIndices = [...new Set(activePairs.flatMap(p=>[p.a,p.b]))];
-  let html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">';
-
-  activePlayerIndices.forEach(a => {
-    const nA = names[a];
-    if (!nA) return;
-    const canEdit = mpIsHost || nA === myName;
-
-    // 找出這個玩家的所有配對
-    const myPairs = activePairs.filter(p => p.a===a || p.b===a);
-
-    let pairsHtml = '';
-    myPairs.forEach(({a:pa, b:pb, nA:pnA, nB:pnB}) => {
-      const opponent = pa===a ? pb : pa;
-      const nOpp = names[opponent];
-      // 訪客只看與自己相關的對手配對
-      if (!mpIsHost && nA !== myName && nOpp !== myName) return;
-      // key 永遠小_大，val 是 a讓b 的洞數（正=a讓b，負=b讓a）
-      const key = pa<pb ? `${pa}_${pb}` : `${pb}_${pa}`;
-      const isReverse = pa>pb ? pa===a : pb===a; // 我是b(大index)
-
-      // 讓洞記憶帶入：根據當前玩家是 nameA 或 nameB 轉換方向
-      const hk = [nA,nOpp].sort().join('|');
-      let memVal = '';
-      if (hdcpMem[hk]) {
-        const m = hdcpMem[hk];
-        // newStrokes > 0：nameA讓nameB；< 0：nameB讓nameA
-        // 轉換為「nA讓nOpp」的視角
-        const raw = m.newStrokes;
-        if (m.nameA === nA) {
-          // 我是 nameA：newStrokes 正=我讓對方，負=對方讓我
-          memVal = raw;
-        } else {
-          // 我是 nameB：方向相反
-          memVal = -raw;
-        }
+  // ── 讓洞記憶提醒（只顯示跟自己相關的） ──
+  if(memArea){
+    const memItems=[];
+    for(let a=0;a<4;a++) for(let b=a+1;b<4;b++){
+      if(!names[a]||!names[b]) continue;
+      // 只顯示跟自己有關的
+      if(myName && names[a]!==myName && names[b]!==myName) continue;
+      const hk=[names[a],names[b]].sort().join('|');
+      if(hdcpMem[hk]){
+        const m=hdcpMem[hk];
+        // 正確方向：newStrokes>0 nameA讓nameB；<0 nameB讓nameA
+        const n=m.newStrokes;
+        const giver=n>=0?m.nameA:m.nameB;
+        const receiver=n>=0?m.nameB:m.nameA;
+        const abs=Math.abs(n);
+        if(abs>0) memItems.push(`${m.date} ${m.course} ｜ ${giver} 讓 ${receiver} ${abs} 洞`);
       }
+    }
+    memArea.innerHTML=memItems.length>0?`
+      <div style="background:#fff8e6;border:1.5px solid #f0c060;border-radius:12px;padding:10px 14px;margin-bottom:10px;font-size:12px;color:#5a4200;line-height:1.6">
+        <div style="font-weight:900;font-size:13px;color:#7a5800;margin-bottom:4px">⚠️ 讓洞記錄提醒</div>
+        ${memItems.map(m=>`<div>${m}</div>`).join('')}
+      </div>`:'';
+  }
 
-      pairsHtml += `
-        <div style="margin-bottom:8px">
-          <div class="check-item on pair-toggle-item" style="justify-content:flex-start;gap:10px;margin-bottom:4px"
-            onclick="mpTogglePairCheck('${key}',${a})">
-            <input type="checkbox" id="hChk_${a}_${opponent}" checked style="pointer-events:none">
-            <span>${nOpp}</span>
-          </div>
-          <div class="check-item pair-toggle-item" style="justify-content:flex-start;gap:10px;margin-bottom:4px"
-            onclick="mpToggleOffset(${a})">
-            <input type="checkbox" id="hOff_${a}" style="pointer-events:none">
-            <span>倍率折抵</span>
-          </div>
-          <div style="display:flex;gap:0;margin-bottom:4px">
-            <div class="pair-mode-chip active" id="hGenChip_p${a}" onclick="mpSetHMode(${a},'general')" style="flex:1;text-align:center;padding:8px;border-radius:10px 0 0 10px;border:2px solid var(--green);background:var(--green-light);color:var(--green-dark);font-size:13px;font-weight:900;cursor:pointer">一般讓法</div>
-            <div class="pair-mode-chip" id="hSpeChip_p${a}" onclick="mpSetHMode(${a},'special')" style="flex:1;text-align:center;padding:8px;border-radius:0 10px 10px 0;border:2px solid var(--border);border-left:none;font-size:13px;font-weight:900;cursor:pointer">特殊讓法</div>
-          </div>
-          <div id="hGenArea_${a}" style="margin-bottom:4px">
-            <input class="inp center" type="number" id="hVal_${a}_${opponent}"
-              value="${memVal}" placeholder="0"
-              oninput="mpHdcpChanged(${a},${opponent},this.value)"
-              ${!canEdit?'readonly':''} />
-          </div>
-          <div id="hSpeArea_${a}" style="display:none">
-            <div class="grid-3">
-              <div class="field"><label>Par3</label><input class="inp center" type="number" id="hP3_${a}" placeholder="0" oninput="mpLobbySync()" ${!canEdit?'readonly':''}></div>
-              <div class="field"><label>Par4</label><input class="inp center" type="number" id="hP4_${a}" placeholder="0" oninput="mpLobbySync()" ${!canEdit?'readonly':''}></div>
-              <div class="field"><label>Par5</label><input class="inp center" type="number" id="hP5_${a}" placeholder="0" oninput="mpLobbySync()" ${!canEdit?'readonly':''}></div>
-            </div>
+  // 找出有名字的配對
+  const pairs=[];
+  for(let a=0;a<4;a++) for(let b=a+1;b<4;b++){
+    if(names[a]&&names[b]) pairs.push({a,b,nA:names[a],nB:names[b]});
+  }
+  if(pairs.length===0){area.innerHTML='<div style="font-size:12px;color:#7c8879;grid-column:1/-1">請先填入玩家名字</div>';return;}
+
+  // 取得有名字的玩家 index
+  const activePlayers=[...new Set(pairs.flatMap(p=>[p.a,p.b]))];
+
+  // ── 主持人：顯示所有玩家的 card；訪客：只顯示自己的 card ──
+  const showPlayers = mpIsHost
+    ? activePlayers
+    : activePlayers.filter(a => names[a]===myName);
+
+  area.innerHTML = showPlayers.map(a => {
+    const nA=names[a];
+    const canEdit=mpIsHost||nA===myName;
+    const myPairs=pairs.filter(p=>p.a===a||p.b===a);
+
+    let pairsHtml='';
+    myPairs.forEach(({a:pa,b:pb,nA:pnA,nB:pnB})=>{
+      const opp=pa===a?pb:pa;
+      const nOpp=names[opp];
+      // 讓洞記憶帶入（正確方向）
+      const hk=[nA,nOpp].sort().join('|');
+      let memVal='';
+      if(hdcpMem[hk]){
+        const m=hdcpMem[hk];
+        // 轉換為「nA讓nOpp」的視角
+        if(m.nameA===nA) memVal=m.newStrokes; // 我是nameA
+        else memVal=-m.newStrokes; // 我是nameB，方向相反
+      }
+      // 勾選框
+      const chkId=`mpHChk_${a}_${opp}`;
+      const valId=`mpHVal_${a}_${opp}`;
+      pairsHtml+=`
+        <div class="check-item active" id="mpHBox_${a}_${opp}" onclick="mpToggleHPair(${a},${opp})" style="margin-bottom:6px;justify-content:flex-start;gap:8px">
+          <input type="checkbox" id="${chkId}" checked style="pointer-events:none;width:18px;height:18px">${nOpp}
+        </div>
+        <div class="check-item" id="mpHOffBox_${a}_${opp}" onclick="mpToggleHOffset(${a},${opp})" style="margin-bottom:6px;justify-content:flex-start;gap:8px">
+          <input type="checkbox" id="mpHOff_${a}_${opp}" style="pointer-events:none;width:18px;height:18px">倍率折抵
+        </div>
+        <div style="display:flex;margin-bottom:6px">
+          <div id="mpHGenBtn_${a}_${opp}" onclick="mpSetHMode(${a},${opp},'general')" style="flex:1;text-align:center;padding:8px;border-radius:10px 0 0 10px;border:2px solid #2f6b3f;background:#dfeedd;color:#1e4d2b;font-size:13px;font-weight:900;cursor:pointer">一般讓法</div>
+          <div id="mpHSpeBtn_${a}_${opp}" onclick="mpSetHMode(${a},${opp},'special')" style="flex:1;text-align:center;padding:8px;border-radius:0 10px 10px 0;border:2px solid #d6e2d3;border-left:none;font-size:13px;font-weight:900;cursor:pointer">特殊讓法</div>
+        </div>
+        <div id="mpHGenArea_${a}_${opp}" style="margin-bottom:6px">
+          <input type="number" id="${valId}" value="${memVal}" placeholder="0"
+            oninput="mpHdcpValChanged(${a},${opp},this.value)"
+            ${!canEdit?'readonly':''}
+            style="width:100%;padding:10px;border:2px solid #d6e2d3;border-radius:10px;font-size:15px;font-weight:700;text-align:center;outline:none;font-family:inherit" />
+        </div>
+        <div id="mpHSpeArea_${a}_${opp}" style="display:none;margin-bottom:6px">
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+            <div><div style="font-size:11px;color:#7c8879;margin-bottom:3px">Par3</div><input type="number" id="mpHP3_${a}_${opp}" placeholder="0" oninput="mpLobbySync()" ${!canEdit?'readonly':''} style="width:100%;padding:8px;border:2px solid #d6e2d3;border-radius:8px;font-size:14px;font-weight:700;text-align:center;outline:none;font-family:inherit"/></div>
+            <div><div style="font-size:11px;color:#7c8879;margin-bottom:3px">Par4</div><input type="number" id="mpHP4_${a}_${opp}" placeholder="0" oninput="mpLobbySync()" ${!canEdit?'readonly':''} style="width:100%;padding:8px;border:2px solid #d6e2d3;border-radius:8px;font-size:14px;font-weight:700;text-align:center;outline:none;font-family:inherit"/></div>
+            <div><div style="font-size:11px;color:#7c8879;margin-bottom:3px">Par5</div><input type="number" id="mpHP5_${a}_${opp}" placeholder="0" oninput="mpLobbySync()" ${!canEdit?'readonly':''} style="width:100%;padding:8px;border:2px solid #d6e2d3;border-radius:8px;font-size:14px;font-weight:700;text-align:center;outline:none;font-family:inherit"/></div>
           </div>
         </div>`;
     });
 
-    html += `<div class="card" style="margin-bottom:0">
-      <div style="font-size:14px;font-weight:900;color:var(--green-dark);margin-bottom:10px">${nA}</div>
+    return `<div class="card" style="margin:0">
+      <div style="font-size:14px;font-weight:900;color:#1e4d2b;margin-bottom:10px">${nA}</div>
       ${pairsHtml}
     </div>`;
-  });
-
-  html += '</div>';
-  area.innerHTML = html;
+  }).join('');
 }
 
-window.mpTogglePairCheck = (key, playerIdx) => {
+window.mpToggleHPair=(a,opp)=>{
+  const cb=document.getElementById(`mpHChk_${a}_${opp}`);
+  const box=document.getElementById(`mpHBox_${a}_${opp}`);
+  if(cb){cb.checked=!cb.checked;box?.classList.toggle('active',cb.checked);}
   mpLobbySync();
 };
-
-window.mpToggleOffset = (playerIdx) => {
-  if (!mpIsHost && names[playerIdx] !== mpUser?.displayName) return;
-  const cb = document.getElementById(`hOff_${playerIdx}`);
-  const box = cb?.closest('.check-item');
-  if (cb) { cb.checked = !cb.checked; box?.classList.toggle('on', cb.checked); }
+window.mpToggleHOffset=(a,opp)=>{
+  const cb=document.getElementById(`mpHOff_${a}_${opp}`);
+  const box=document.getElementById(`mpHOffBox_${a}_${opp}`);
+  if(cb){cb.checked=!cb.checked;box?.classList.toggle('active',cb.checked);}
   mpLobbySync();
 };
-
-window.mpSetHMode = (playerIdx, mode) => {
-  const names = getSlotNames();
-  const canEdit = mpIsHost || names[playerIdx] === mpUser?.displayName;
-  if (!canEdit) return;
-  const genChip = document.getElementById(`hGenChip_p${playerIdx}`);
-  const speChip = document.getElementById(`hSpeChip_p${playerIdx}`);
-  const genArea = document.getElementById(`hGenArea_p${playerIdx}`);
-  const speArea = document.getElementById(`hSpeArea_p${playerIdx}`);
-  if (mode==='general') {
-    genChip?.setAttribute('style', genChip.getAttribute('style').replace('var(--border)','var(--green)').replace('background:white','background:var(--green-light)'));
-    if(genChip){genChip.style.borderColor='var(--green)';genChip.style.background='var(--green-light)';genChip.style.color='var(--green-dark)';}
-    if(speChip){speChip.style.borderColor='var(--border)';speChip.style.background='white';speChip.style.color='var(--text)';}
-    if(genArea) genArea.style.display='block';
-    if(speArea) speArea.style.display='none';
+window.mpSetHMode=(a,opp,mode)=>{
+  const gen=document.getElementById(`mpHGenBtn_${a}_${opp}`);
+  const spe=document.getElementById(`mpHSpeBtn_${a}_${opp}`);
+  const genA=document.getElementById(`mpHGenArea_${a}_${opp}`);
+  const speA=document.getElementById(`mpHSpeArea_${a}_${opp}`);
+  if(mode==='general'){
+    if(gen){gen.style.background='#dfeedd';gen.style.borderColor='#2f6b3f';gen.style.color='#1e4d2b';}
+    if(spe){spe.style.background='#fff';spe.style.borderColor='#d6e2d3';spe.style.color='#18311f';}
+    if(genA)genA.style.display='block';
+    if(speA)speA.style.display='none';
   } else {
-    if(genChip){genChip.style.borderColor='var(--border)';genChip.style.background='white';genChip.style.color='var(--text)';}
-    if(speChip){speChip.style.borderColor='var(--green)';speChip.style.background='var(--green-light)';speChip.style.color='var(--green-dark)';}
-    if(genArea) genArea.style.display='none';
-    if(speArea) speArea.style.display='block';
+    if(gen){gen.style.background='#fff';gen.style.borderColor='#d6e2d3';gen.style.color='#18311f';}
+    if(spe){spe.style.background='#dfeedd';spe.style.borderColor='#2f6b3f';spe.style.color='#1e4d2b';}
+    if(genA)genA.style.display='none';
+    if(speA)speA.style.display='block';
   }
   mpLobbySync();
 };
-
-// A讓B n洞 → B讓A 自動變 -n
-window.mpHdcpChanged = (a, b, val) => {
-  const n = parseFloat(val) || 0;
-  const reverseEl = document.getElementById(`hVal_${b}_${a}`);
-  if (reverseEl) reverseEl.value = n === 0 ? '' : -n;
+window.mpHdcpValChanged=(a,opp,val)=>{
+  // 連動：A讓B n → B讓A = -n
+  const n=parseFloat(val)||0;
+  const rev=document.getElementById(`mpHVal_${opp}_${a}`);
+  if(rev) rev.value=n===0?'':String(-n);
   mpLobbySync();
 };
-
-window.mpToggleHMode = key => { mpLobbySync(); };
 
 // ── LOBBY SYNC ────────────────────────────────────────────
 window.mpLobbySync = () => {
-  if (!mpGameId||!mpIsHost||mpApplying) return;
-  const s = mpCollectLobby();
-  update(ref(db,`games/${mpGameId}`),{lobby:s}).catch(()=>{});
+  if(!mpGameId||!mpIsHost||mpApplying) return;
+  const lobby=mpCollectLobby();
+  update(ref(db,`games/${mpGameId}`),{lobby}).catch(()=>{});
 };
 
 function mpCollectLobby() {
-  const g = id => document.getElementById(id);
-  // 新的讓洞格式：每個玩家各自的設定
-  const pairs = {};
-  for (let a=0;a<4;a++) {
-    for (let b=0;b<4;b++) {
-      if (a===b) continue;
-      const val = g(`hValFor_${a}_${b}`)?.value || '';
-      if (val) pairs[`${a}_${b}`] = parseFloat(val) || 0;
-    }
-  }
-  // 讓洞模式和特殊讓法（每個玩家）
-  const hdcpModes = {};
-  for (let a=0;a<4;a++) {
-    hdcpModes[a] = {
-      mode: g(`hSpe_${a}`)?.checked ? 'special' : 'general',
-      p3: g(`hP3_${a}`)?.value||'',
-      p4: g(`hP4_${a}`)?.value||'',
-      p5: g(`hP5_${a}`)?.value||'',
-      offset: !!g(`hOff_${a}`)?.checked
+  const g=id=>document.getElementById(id);
+  // 收集讓洞
+  const hdcp={};
+  const names=mpPlayers.map(p=>p.name?.trim()||'');
+  for(let a=0;a<4;a++) for(let b=a+1;b<4;b++){
+    if(!names[a]||!names[b]) continue;
+    hdcp[`${a}_${b}`]={
+      checked:!!g(`mpHChk_${a}_${b}`)?.checked,
+      offset:!!g(`mpHOff_${a}_${b}`)?.checked,
+      mode:g(`mpHSpeBtn_${a}_${b}`)?.style.background.includes('dfeedd')?'special':'general',
+      val:g(`mpHVal_${a}_${b}`)?.value||'',
+      p3:g(`mpHP3_${a}_${b}`)?.value||'',
+      p4:g(`mpHP4_${a}_${b}`)?.value||'',
+      p5:g(`mpHP5_${a}_${b}`)?.value||''
     };
   }
   return {
-    slots: mpSlots,
-    course: g('loopCourse')?.value||'',
-    startHole: g('loopStart')?.value||'1',
-    pointVal: g('loopPtVal')?.value||'100',
-    mB: g('loopMB')?.value||'2', mE4: g('loopME4')?.value||'5',
-    mE5: g('loopME5')?.value||'3', mHIO: g('loopMHIO')?.value||'10',
-    vegas: !!g('chkVegas')?.checked, carry: !!g('chkCarry')?.checked,
-    match: !!g('chkMatch')?.checked, par: !!g('chkPar')?.checked,
-    matchPlayers: [0,1,2,3].map(i=>!!g(`chkPlayer_match_${i}`)?.checked),
-    parPlayers: [0,1,2,3].map(i=>!!g(`chkPlayer_par_${i}`)?.checked),
-    vegasRanks: [0,1,2,3].map(i=>g(`vegRank${i}`)?.value||''),
-    pairs, hdcpModes
+    slots:mpPlayers.map(p=>({name:p.name||'',uid:p.uid||'',photo:p.photo||''})),
+    course:g('mpCourse')?.value||'',
+    startHole:g('mpStartHole')?.value||'1',
+    pointVal:g('mpPtVal')?.value||'100',
+    mB:g('mpMB')?.value||'2',mE4:g('mpME4')?.value||'5',
+    mE5:g('mpME5')?.value||'3',mHIO:g('mpMHIO')?.value||'10',
+    vegas:!!g('mpChkVegas')?.checked,carry:!!g('mpChkCarry')?.checked,
+    match:!!g('mpChkMatch')?.checked,par:!!g('mpChkPar')?.checked,
+    matchPlayers:[0,1,2,3].map(i=>!!g(`mpChkP_match_${i}`)?.checked),
+    parPlayers:[0,1,2,3].map(i=>!!g(`mpChkP_par_${i}`)?.checked),
+    hdcp
   };
 }
 
 function mpApplyLobby(s) {
-  mpApplying=true;
+  if(!s) return;
   const sv=(id,v)=>{const e=document.getElementById(id);if(e)e.value=v??'';};
   const sc=(id,v)=>{const e=document.getElementById(id);if(e)e.checked=!!v;};
-
-  if(s.slots){
-    // Firebase 陣列可能有 null，用空物件填充
-    const rawSlots = Array.isArray(s.slots) ? s.slots : Object.values(s.slots);
-    mpSlots = Array.from({length:4}, (_,i) => {
-      const sl = rawSlots[i];
-      return sl ? {...sl} : {name:'',uid:''};
-    });
-    const focusedEl = document.activeElement;
-    const isTypingSlot = focusedEl?.id?.startsWith('slotInp');
-    if (!isTypingSlot) mpRenderSlots();
-  }
-  sv('loopCourse',s.course); sv('loopStart',s.startHole);
-  sv('loopPtVal',s.pointVal); sv('loopMB',s.mB);
-  sv('loopME4',s.mE4); sv('loopME5',s.mE5); sv('loopMHIO',s.mHIO);
-
+  sv('mpCourse',s.course); sv('mpStartHole',s.startHole);
+  sv('mpPtVal',s.pointVal); sv('mpMB',s.mB);
+  sv('mpME4',s.mE4); sv('mpME5',s.mE5); sv('mpMHIO',s.mHIO);
   ['Vegas','Carry','Match','Par'].forEach(m=>{
     const v=s[m.toLowerCase()];
-    const cb=document.getElementById(`chk${m}`);
-    const row=document.getElementById(`modeRow${m}`);
-    const sub=document.getElementById(`${m.toLowerCase()}Sub`);
-    if(cb)cb.checked=!!v; row?.classList.toggle('on',!!v);
+    const cb=document.getElementById(`mpChk${m}`);
+    const row=document.getElementById(`mpModeRow${m}`);
+    const sub=document.getElementById(`mp${m}Sub`);
+    if(cb)cb.checked=!!v; row?.classList.toggle('active',!!v);
     if(sub)sub.style.display=!!v?'block':'none';
   });
-  const hdcpCard=document.getElementById('hdcpCard');
-  if(hdcpCard)hdcpCard.style.display=s.match?'block':'none';
-
+  const hCard=document.getElementById('mpHdcpCard');
+  if(hCard)hCard.style.display=s.match?'block':'none';
   mpUpdateModePlayers();
   setTimeout(()=>{
-    (s.matchPlayers||[]).forEach((v,i)=>{sc(`chkPlayer_match_${i}`,v);document.getElementById(`box_chkPlayer_match_${i}`)?.classList.toggle('on',!!v);});
-    (s.parPlayers||[]).forEach((v,i)=>{sc(`chkPlayer_par_${i}`,v);document.getElementById(`box_chkPlayer_par_${i}`)?.classList.toggle('on',!!v);});
-    (s.vegasRanks||[]).forEach((v,i)=>sv(`vegRank${i}`,v));
-    mpUpdateVegasRanks();
-    // 套用讓洞數值
-    if(s.pairs) Object.entries(s.pairs).forEach(([key,val])=>{
-      const [a,b] = key.split('_');
-      sv(`hValFor_${a}_${b}`, val);
+    (s.matchPlayers||[]).forEach((v,i)=>{sc(`mpChkP_match_${i}`,v);document.getElementById(`mpBox_match_${i}`)?.classList.toggle('active',!!v);});
+    (s.parPlayers||[]).forEach((v,i)=>{sc(`mpChkP_par_${i}`,v);document.getElementById(`mpBox_par_${i}`)?.classList.toggle('active',!!v);});
+    // 套用讓洞
+    if(s.hdcp) Object.entries(s.hdcp).forEach(([key,p])=>{
+      const[a,b]=key.split('_');
+      sc(`mpHChk_${a}_${b}`,p.checked);
+      document.getElementById(`mpHBox_${a}_${b}`)?.classList.toggle('active',!!p.checked);
+      sc(`mpHOff_${a}_${b}`,p.offset);
+      document.getElementById(`mpHOffBox_${a}_${b}`)?.classList.toggle('active',!!p.offset);
+      if(p.mode==='special') mpSetHMode(+a,+b,'special');
+      else mpSetHMode(+a,+b,'general');
+      sv(`mpHVal_${a}_${b}`,p.val);
+      sv(`mpHP3_${a}_${b}`,p.p3);
+      sv(`mpHP4_${a}_${b}`,p.p4);
+      sv(`mpHP5_${a}_${b}`,p.p5);
     });
-    // 套用讓洞模式
-    if(s.hdcpModes) Object.entries(s.hdcpModes).forEach(([a,m])=>{
-      const isSpec = m.mode==='special';
-      sc(`hSpe_${a}`,isSpec); sc(`hGen_${a}`,!isSpec);
-      const specArea=document.getElementById(`hSpecArea_${a}`);
-      if(specArea)specArea.style.display=isSpec?'block':'none';
-      sv(`hP3_${a}`,m.p3); sv(`hP4_${a}`,m.p4); sv(`hP5_${a}`,m.p5);
-      sc(`hOff_${a}`,m.offset);
-    });
-    setTimeout(()=>{mpApplying=false;},100);
   },50);
 }
 
 // ── START GAME ────────────────────────────────────────────
 window.mpStartGame = async () => {
-  const lobby = mpCollectLobby();
+  // 驗證：必須選擇球場
+  if(!document.getElementById('mpCourse')?.value){
+    const err=document.getElementById('mpLobbyError');
+    if(err){err.style.display='block';err.textContent='⚠️ 請先選擇球場才能開始';}
+    return;
+  }
+  const lobby=mpCollectLobby();
   mpApply174(lobby);
   await new Promise(r=>setTimeout(r,200));
   let state=null;
@@ -4699,110 +5441,78 @@ window.mpStartGame = async () => {
 
 function mpApply174(s) {
   const sv=(id,v)=>{const e=document.getElementById(id);if(e){e.value=v??'';e.dispatchEvent(new Event('input',{bubbles:true}));}};
-  const sc=(id,v)=>{const e=document.getElementById(id);if(e&&e.checked!==!!v){e.checked=!!v;e.dispatchEvent(new Event('change',{bubbles:true}));}};
-
+  const sc=(id,v,trigger=true)=>{const e=document.getElementById(id);if(e&&e.checked!==!!v){e.checked=!!v;if(trigger)e.dispatchEvent(new Event('change',{bubbles:true}));}};
   // 球場
   const sel=document.getElementById('savedCourseSelect');
   if(sel&&s.course){sel.value=s.course;if(typeof handleSavedCourseSelect==='function')handleSavedCourseSelect();}
   sv('startHole',s.startHole); sv('pointVal',s.pointVal);
   sv('mB',s.mB); sv('mE4',s.mE4); sv('mE5',s.mE5); sv('mHIO',s.mHIO);
-
   // 玩家名字
   (s.slots||[]).forEach((sl,i)=>{if(sl.name)sv(`name${i}`,sl.name);});
   if(typeof updateNames==='function')updateNames(true);
-
-  // 模式
-  sc('modeVegasCb',s.vegas); sc('extMode',s.carry); sc('modeMatch',s.match); sc('modePar',s.par);
+  // 比賽模式（1.74用 modeVegas checkbox 但 id 在不同地方）
+  sc('modeVegas',s.vegas); sc('extMode',s.carry);
+  sc('modeMatch',s.match); sc('modePar',s.par);
   if(typeof applyModeStates==='function')applyModeStates();
-
   // 參與玩家
   (s.matchPlayers||[]).forEach((v,i)=>sc(`p${i}_m`,v));
   (s.parPlayers||[]).forEach((v,i)=>sc(`p${i}_p`,v));
-
-  // Vegas ranks
-  (s.vegasRanks||[]).forEach((v,i)=>{
-    const inp=document.getElementById(`vegasRank${i}`);
-    if(inp&&v){inp.value=v;inp.dispatchEvent(new Event('change',{bubbles:true}));}
-  });
-
   // 讓洞
-  if(s.pairs)Object.entries(s.pairs).forEach(([key,p])=>{
-    const [a,b]=key.split('_');
+  if(s.hdcp) Object.entries(s.hdcp).forEach(([key,p])=>{
+    const[a,b]=key.split('_');
     if(!p.val&&!p.p3) return;
-    if(typeof setPairState==='function')setPairState(+a,+b,true,p.val||'0',true);
+    if(typeof setPairState==='function')setPairState(+a,+b,!!p.checked,p.val||'0',true);
     if(typeof setPairHandicapMode==='function')setPairHandicapMode(+a,+b,p.mode||'general',true);
     const se=document.getElementById(`pair-strokes-${a}-${b}`);if(se)se.value=p.val||'';
     ['p3','p4','p5'].forEach(k=>{const e=document.getElementById(`pair-special-${k}-${a}-${b}`);if(e)e.value=p[k]||'';});
-    if(p.offset&&typeof togglePairOffset==='function')togglePairOffset(+a,+b);
+    if(p.offset){const oe=document.getElementById(`pair-offset-${a}-${b}`);if(oe&&!oe.checked&&typeof togglePairOffset==='function')togglePairOffset(+a,+b);}
   });
 }
 
 // ── ENTER GAME ────────────────────────────────────────────
 function mpEnterGame(code, game) {
   if(mpListener){off(ref(db,`games/${mpGameId}`));mpListener=null;}
-  document.getElementById('game-bar').classList.add('show');
-  document.getElementById('barCode').textContent=code;
+  mpHideOverlay();
+  document.body.classList.add('mp-active');
+  if(mpIsHost) document.body.classList.remove('mp-guest');
+  else document.body.classList.add('mp-guest');
+  // 顯示底部 bar
+  const bar=document.getElementById('mp-bar');
+  if(bar){bar.style.display='flex';document.getElementById('mpBarCode').textContent=code;}
+  // 切換到計分頁
+  if(typeof openTab==='function') openTab('scoring');
 
+  if(game){
+    if(mpIsHost){
+      if(game.lobby)mpApply174(game.lobby);
+      setTimeout(()=>{if(typeof renderScoreboard==='function')renderScoreboard();},300);
+    } else {
+      if(game.state)mpApplyState(game.state);
+    }
+  }
+  // 掛載同步
   if(mpIsHost){
-    if(game.lobby)mpApply174(game.lobby);
-    mpRenderVegasRankBar(game.lobby);
-    showPage('page-game');
-    setTimeout(()=>{if(typeof renderScoreboard==='function')renderScoreboard();},300);
     document.addEventListener('input',mpHostSync,true);
     document.addEventListener('change',mpHostSync,true);
   } else {
-    if(game.state)mpApplyState(game.state);
-    mpRenderVegasRankBar(game.lobby);
     document.addEventListener('input',mpGuestSync,true);
     document.addEventListener('change',mpGuestSync,true);
-    // 顯示玩家綁定畫面，綁定後才進計分
-    const slots = game.lobby?.slots || [];
-    mpShowBind(slots, game.hostUid || '');
   }
-
+  // 監聽 Firebase
   mpListener=onValue(ref(db,`games/${code}`),snap=>{
     if(!snap.exists()){mpForceLeave();return;}
     const g=snap.val();
-    const names=(g.lobby?.slots||[]).map(s=>s.name).filter(Boolean);
-    document.getElementById('barNames').textContent=names.join('、');
-    const courseEl=document.getElementById('loopCourse');
-    const courseName=courseEl?.options[courseEl.selectedIndex]?.text||g.lobby?.course||'';
-    document.getElementById('scoreCourseLabel').textContent=courseName;
+    // 更新底部 bar 名字
+    const slots=mpSlotsFromGame(g);
+    const names=slots.map(s=>s.name).filter(Boolean);
+    const barNames=document.getElementById('mpBarNames');
+    if(barNames)barNames.textContent=names.join('、');
     if(!mpIsHost&&g.state&&!mpApplying)mpApplyState(g.state);
     if(mpIsHost&&g.guestScores&&!mpApplying)mpApplyGuestScores(g.guestScores);
   });
-
-  // 初始化計分表
-  setTimeout(()=>{
-    if(typeof renderScoreboard==='function')renderScoreboard();
-  },500);
 }
 
-// ── GAME TAB SWITCH ───────────────────────────────────────
-window.switchGameTab = tab => {
-  document.getElementById('gameScore').style.display=tab==='score'?'block':'none';
-  document.getElementById('gameResult').style.display=tab==='result'?'block':'none';
-  document.getElementById('tabScore').classList.toggle('active',tab==='score');
-  document.getElementById('tabResult').classList.toggle('active',tab==='result');
-  if(tab==='result')mpCalcFinal();
-};
-
-window.mpCalcFinal = () => {
-  if(typeof calculateFinal==='function'){
-    calculateFinal();
-    // 把 1.74 的 result DOM 搬到 gameResult
-    const src174=document.getElementById('result');
-    const dest=document.getElementById('resultContent');
-    if(src174&&dest)dest.innerHTML=src174.innerHTML;
-  }
-};
-
-// ── COURSE EDIT ───────────────────────────────────────────
-window.mpShowCourseEdit = () => {
-  if(typeof showNewCourseDialog==='function')showNewCourseDialog('');
-};
-
-// ── HOST SYNC ─────────────────────────────────────────────
+// ── HOST / GUEST SYNC ─────────────────────────────────────
 function mpHostSync(){
   if(mpApplying)return;
   clearTimeout(mpSyncTimer);
@@ -4816,7 +5526,6 @@ function mpHostSync(){
   },300);
 }
 
-// ── GUEST SYNC ────────────────────────────────────────────
 function mpGuestSync(e){
   if(mpApplying)return;
   const id=e.target?.id;
@@ -4831,29 +5540,37 @@ function mpGuestSync(e){
 }
 
 // ── APPLY STATE ───────────────────────────────────────────
-function mpSetV(id,val){const e=document.getElementById(id);if(!e)return;if(e.type==='checkbox')e.checked=!!val;else if(e.value!==String(val??''))e.value=val??'';}
-
 function mpApplyState(state){
   if(!state)return;
   mpApplying=true;
   try{
     const sel=document.getElementById('savedCourseSelect');
     if(sel&&state.savedCourse!==undefined){sel.value=state.savedCourse;if(typeof handleSavedCourseSelect==='function')handleSavedCourseSelect();}
-    mpSetV('startHole',state.startHole); mpSetV('pointVal',state.pointVal);
-    mpSetV('mB',state.mB); mpSetV('mE4',state.mE4); mpSetV('mE5',state.mE5); mpSetV('mHIO',state.mHIO);
+    const sv=(id,v)=>{const e=document.getElementById(id);if(e&&e.value!==String(v??''))e.value=v??'';};
+    sv('startHole',state.startHole); sv('pointVal',state.pointVal);
+    sv('mB',state.mB); sv('mE4',state.mE4); sv('mE5',state.mE5); sv('mHIO',state.mHIO);
     let mc=false;
-    ['modeVegas','extMode','modeMatch','modePar'].forEach(k=>{if(k in state){mpSetV(k,state[k]);mc=true;}});
+    ['modeVegas','extMode','modeMatch','modePar'].forEach(k=>{
+      if(k in state){const e=document.getElementById(k);if(e)e.checked=!!state[k];mc=true;}
+    });
     if(mc&&typeof applyModeStates==='function')applyModeStates();
-    (state.players||[]).forEach((p,i)=>mpSetV(`name${i}`,p.name));
+    (state.players||[]).forEach((p,i)=>{const e=document.getElementById(`name${i}`);if(e)e.value=p.name||'';});
     if(typeof updateNames==='function')updateNames(true);
-    (state.players||[]).forEach((p,i)=>{mpSetV(`p${i}_m`,p.match);mpSetV(`p${i}_p`,p.par);});
+    (state.players||[]).forEach((p,i)=>{
+      const em=document.getElementById(`p${i}_m`);if(em)em.checked=!!p.match;
+      const ep=document.getElementById(`p${i}_p`);if(ep)ep.checked=!!p.par;
+    });
     const fid=document.activeElement?.id;
     if(state.scores&&typeof playerIDs!=='undefined'){
-      playerIDs.forEach(i=>{for(let h=1;h<=18;h++){const cid=`cell_${i}_${h}`;if(cid===fid)continue;const v=state.scores[`${i}_${h}`]||'';const el=document.getElementById(cid);if(el&&el.value!==v){el.value=v;if(typeof drawMark==='function')drawMark(i,h,false);}}});
+      playerIDs.forEach(i=>{for(let h=1;h<=18;h++){
+        const cid=`cell_${i}_${h}`;if(cid===fid)continue;
+        const v=state.scores[`${i}_${h}`]||'';
+        const el=document.getElementById(cid);
+        if(el&&el.value!==v){el.value=v;if(typeof drawMark==='function')drawMark(i,h,false);}
+      }});
       if(typeof updateParTotals==='function')updateParTotals();
       if(typeof getActivePlayers==='function')getActivePlayers().forEach(p=>{if(typeof updatePlayerTotals==='function')updatePlayerTotals(p);});
     }
-    if(typeof renderScoreboard==='function')renderScoreboard();
     setTimeout(()=>{if(typeof applyHdcpMemoryAndNotify==='function')applyHdcpMemoryAndNotify();},200);
   }catch(e){console.error('mpApplyState',e);}
   finally{setTimeout(()=>{mpApplying=false;},200);}
@@ -4874,54 +5591,6 @@ function mpApplyGuestScores(scores){
   setTimeout(()=>{mpApplying=false;},100);
 }
 
-// ── BIND ──────────────────────────────────────────────────
-function mpShowBind(slots, hostUid){
-  hostUid = hostUid || '';
-  // 只顯示：有名字 + 沒有 uid（未綁定的手動輸入名字）
-  const available = (Array.isArray(slots) ? slots : Object.values(slots))
-    .map((s,i)=>({...(s||{}),i}))
-    .filter(s => {
-      if (!s.name?.trim()) return false;
-      if (s.uid && s.uid !== '') return false; // 已被綁定
-      return true;
-    });
-  if(!available.length){
-    mpBindGoNext();
-    return;
-  }
-  document.getElementById('bindList').innerHTML=available.map(s=>`
-    <button class="btn btn-outline" onclick="mpBind(${s.i})" style="justify-content:flex-start;gap:12px">
-      <div class="avatar" style="background:var(--green);color:white;flex-shrink:0">${s.name[0]}</div>
-      ${s.name}
-    </button>`).join('');
-  showPage('page-bind');
-}
-
-// 綁定後根據球局狀態決定去哪
-async function mpBindGoNext() {
-  if (!mpGameId) { showPage('page-lobby'); return; }
-  const snap = await get(ref(db,`games/${mpGameId}`));
-  const status = snap.exists() ? snap.val().status : 'lobby';
-  if (status === 'playing') showPage('page-game');
-  else showPage('page-lobby');
-}
-
-window.mpBind = async idx => {
-  mpBoundIdx=idx;
-  if(mpGameId&&mpUser.displayName){
-    await update(ref(db,`games/${mpGameId}/lobby/slots/${idx}`),{name:mpUser.displayName,uid:mpUser.uid});
-    const el=document.getElementById(`name${idx}`);
-    if(el){el.value=mpUser.displayName;el.dispatchEvent(new Event('input',{bubbles:true}));}
-  }
-  toast(`✅ 已綁定為玩家${idx+1}：${mpUser.displayName}`);
-  mpBindGoNext();
-};
-
-window.mpBindSkip=()=>{
-  mpBoundIdx=null;
-  mpBindGoNext();
-};
-
 // ── LEAVE ─────────────────────────────────────────────────
 window.mpLeave = async () => {
   if(mpListener){off(ref(db,`games/${mpGameId}`));mpListener=null;}
@@ -4933,26 +5602,17 @@ window.mpLeave = async () => {
   mpGameId=null;mpIsHost=false;mpBoundIdx=null;
   sessionStorage.removeItem('mpGameId');
   sessionStorage.removeItem('mpIsHost');
-  document.getElementById('game-bar').classList.remove('show');
-  document.getElementById('gameTabs').classList.remove('show');
+  const bar=document.getElementById('mp-bar');
+  if(bar)bar.style.display='none';
+  document.body.classList.remove('mp-active','mp-guest');
+  mpShowOverlay('home');
   if(gameId&&mpUser){
     try{
       await remove(ref(db,`games/${gameId}/players/${mpUser.uid}`));
-      // 清除 lobby.slots 裡的 uid（但保留名字讓主持人看得到）
-      const lobbySnap = await get(ref(db,`games/${gameId}/lobby/slots`));
-      if (lobbySnap.exists()) {
-        const slots = lobbySnap.val();
-        const updates = {};
-        Object.entries(slots).forEach(([i, s]) => {
-          if (s.uid === mpUser.uid) updates[`games/${gameId}/lobby/slots/${i}/uid`] = '';
-        });
-        if (Object.keys(updates).length > 0) await update(ref(db), updates);
-      }
       const snap=await get(ref(db,`games/${gameId}/players`));
       if(!snap.exists()||Object.keys(snap.val()||{}).length===0)await remove(ref(db,`games/${gameId}`));
     }catch(e){}
   }
-  showPage('page-home');
 };
 
 function mpForceLeave(){
@@ -4962,47 +5622,25 @@ function mpForceLeave(){
   document.removeEventListener('input',mpGuestSync,true);
   document.removeEventListener('change',mpGuestSync,true);
   mpGameId=null;mpIsHost=false;
-  document.getElementById('game-bar').classList.remove('show');
-  showPage('page-home');
+  sessionStorage.removeItem('mpGameId');
+  sessionStorage.removeItem('mpIsHost');
+  const bar=document.getElementById('mp-bar');
+  if(bar)bar.style.display='none';
+  document.body.classList.remove('mp-active','mp-guest');
+  mpShowOverlay('home');
 }
 
-// ── NEW COURSE ────────────────────────────────────────────
-window.mpNewCourse = () => { if(typeof showNewCourseDialog==='function')showNewCourseDialog(''); };
-
-// ── COPY ─────────────────────────────────────────────────
+// ── COPY ──────────────────────────────────────────────────
 window.mpCopy = async () => {
-  const code=document.getElementById('lobbyCode').textContent.trim();
+  const code=document.getElementById('mpRoomCode').textContent.trim();
   if(!code||code==='----')return;
   try{await navigator.clipboard.writeText(code);}
   catch(e){const el=document.createElement('input');el.value=code;document.body.appendChild(el);el.select();document.execCommand('copy');document.body.removeChild(el);}
-  toast('✅ 已複製房間碼：'+code);
+  mpToast('✅ 已複製房間碼：'+code);
 };
 
-// ── PAGE ROUTER ───────────────────────────────────────────
-window.showPage = page => {
-  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
-  const el=document.getElementById(page);
-  if(el)el.classList.add('active');
-  // 計分頁才顯示 bottom tabs 和 game bar
-  const inGame=page==='page-game';
-  document.getElementById('gameTabs').classList.toggle('show',inGame);
-  if(inGame)switchGameTab('score');
-};
-
-// ── TOAST ─────────────────────────────────────────────────
-let _tt;
-window.toast = (msg,dur=3000)=>{
-  const t=document.getElementById('toast');
-  if(!t)return;
-  t.textContent=msg; t.classList.remove('show');
-  void t.offsetHeight; t.classList.add('show');
-  clearTimeout(_tt); _tt=setTimeout(()=>t.classList.remove('show'),dur);
-};
-
-// ── HELPERS ───────────────────────────────────────────────
-window.showErr=(id,msg)=>{const e=document.getElementById(id);if(e){e.style.display='block';e.textContent=msg;}};
-window.hideErr=(id)=>{const e=document.getElementById(id);if(e)e.style.display='none';};
+window.mpNewCourse = () => { if(typeof showNewCourseDialog==='function')showNewCourseDialog(''); };
 
 </script>
-</body>
-</html>
+<!-- 綁定頁面需要的隱藏欄位 -->
+<input type="hidden" id="mpBindSkipGoToGame" value="0">
