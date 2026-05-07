@@ -4191,10 +4191,10 @@ window.mpJoinGame = async () => {
         const slots = g.lobby?.slots || [];
         // 手動輸入的條件：有名字、沒有 uid（或 uid 是空字串）、不是主持人 uid
         const manualSlots = slots.filter(s =>
-          s.name?.trim() && (!s.uid || s.uid === '') && s.uid !== hostUid
+          s.name?.trim() && (!s.uid || s.uid === '')
         );
         if (manualSlots.length > 0) {
-          mpShowBind(slots);
+          mpShowBind(slots, hostUid);
         }
       }
     }
@@ -4757,8 +4757,7 @@ function mpEnterGame(code, game) {
     document.addEventListener('change',mpGuestSync,true);
     // 顯示玩家綁定畫面，綁定後才進計分
     const slots = game.lobby?.slots || [];
-    if (slots) slots._hostUid = game.hostUid || '';
-    mpShowBind(slots);
+    mpShowBind(slots, game.hostUid || '');
   }
 
   mpListener=onValue(ref(db,`games/${code}`),snap=>{
@@ -4876,15 +4875,16 @@ function mpApplyGuestScores(scores){
 }
 
 // ── BIND ──────────────────────────────────────────────────
-function mpShowBind(slots){
-  // 只顯示：有名字 + 沒有 uid + 不是主持人
-  const hostUid = slots._hostUid || '';
-  const available = slots.map((s,i)=>({...s,i})).filter(s => {
-    if (!s.name?.trim()) return false;
-    if (s.uid && s.uid !== '') return false; // 已被綁定
-    if (s.uid === hostUid) return false; // 主持人
-    return true;
-  });
+function mpShowBind(slots, hostUid){
+  hostUid = hostUid || '';
+  // 只顯示：有名字 + 沒有 uid（未綁定的手動輸入名字）
+  const available = (Array.isArray(slots) ? slots : Object.values(slots))
+    .map((s,i)=>({...(s||{}),i}))
+    .filter(s => {
+      if (!s.name?.trim()) return false;
+      if (s.uid && s.uid !== '') return false; // 已被綁定
+      return true;
+    });
   if(!available.length){
     mpBindGoNext();
     return;
