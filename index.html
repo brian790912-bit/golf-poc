@@ -4299,6 +4299,8 @@ function mpRenderSlots() {
              value="${s.name}" id="slotInp${i}"
              oninput="mpSlotNameInput(${i},this)"
              onblur="mpSlotName(${i},this.value)"
+             oncompositionstart="this._composing=true"
+             oncompositionend="this._composing=false;mpSlotName(${i},this.value)"
              ${!mpIsHost?'readonly':''} />`
       }
     </div>`).join('');
@@ -4320,12 +4322,28 @@ window.mpDP = (e,i) => {
   mpRenderSlots(); mpLobbySync();
 };
 window.mpClearSlot = i => { mpSlots[i]={name:'',uid:''}; mpRenderSlots(); mpLobbySync(); };
+let _slotSyncTimer = null;
 window.mpSlotNameInput = (i, el) => {
-  if (el.composing) return; // 注音輸入中不觸發
+  if (el._composing) return; // 注音輸入中不觸發
   mpSlots[i].name = el.value;
-  mpUpdateHdcp(); mpUpdateModePlayers(); mpLobbySync();
+  // 只更新讓洞和模式，不重渲 slots（避免 focus 跳走）
+  mpUpdateHdcp();
+  mpUpdateModePlayers();
+  // debounce 同步到 Firebase
+  clearTimeout(_slotSyncTimer);
+  _slotSyncTimer = setTimeout(() => {
+    mpApplying = true; // 阻止 onValue 觸發重渲
+    mpLobbySync();
+    setTimeout(() => { mpApplying = false; }, 500);
+  }, 800);
 };
-window.mpSlotName = (i,v) => { mpSlots[i].name=v; mpUpdateHdcp(); mpUpdateModePlayers(); mpLobbySync(); };
+window.mpSlotName = (i,v) => {
+  mpSlots[i].name=v;
+  mpUpdateHdcp(); mpUpdateModePlayers();
+  mpApplying = true;
+  mpLobbySync();
+  setTimeout(() => { mpApplying = false; }, 500);
+};
 
 function getSlotNames() { return mpSlots.map(s=>s.name?.trim()||''); }
 
@@ -4610,7 +4628,13 @@ function mpApplyLobby(s) {
   const sv=(id,v)=>{const e=document.getElementById(id);if(e)e.value=v??'';};
   const sc=(id,v)=>{const e=document.getElementById(id);if(e)e.checked=!!v;};
 
-  if(s.slots){mpSlots=s.slots.map(sl=>({...sl}));mpRenderSlots();}
+  if(s.slots){
+    mpSlots=s.slots.map(sl=>({...sl}));
+    // 如果有 slot input 正在 focus，不重渲避免跳走
+    const focusedEl = document.activeElement;
+    const isTypingSlot = focusedEl?.id?.startsWith('slotInp');
+    if (!isTypingSlot) mpRenderSlots();
+  }
   sv('loopCourse',s.course); sv('loopStart',s.startHole);
   sv('loopPtVal',s.pointVal); sv('loopMB',s.mB);
   sv('loopME4',s.mE4); sv('loopME5',s.mE5); sv('loopMHIO',s.mHIO);
