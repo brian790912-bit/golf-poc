@@ -5088,51 +5088,53 @@ function mpSetLobbyPermissions() {
 }
 
 function mpRenderPlayerList(players, game) {
-  const slots = mpSlotsFromGame(game);
   const el = document.getElementById('mpPlayerList');
   if (!el) return;
 
-  let html = '';
-  // 顯示4個槽位
-  for (let i=0; i<4; i++) {
-    const s = slots[i];
-    const isHost = s.uid === mpHostUid;
-    const hasPlayer = s.uid && players.find(([uid])=>uid===s.uid);
+  // 第一部分：已加入的玩家（從 Firebase players 讀取）
+  let html = players.map(([uid, p]) => `
+    <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #eef4ec">
+      <div style="width:36px;height:36px;border-radius:50%;background:#2f6b3f;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:14px;flex-shrink:0;overflow:hidden">
+        ${p.photo?`<img src="${p.photo}" style="width:100%;height:100%;object-fit:cover"/>`:(p.name||'?')[0]}
+      </div>
+      <div style="flex:1;font-size:14px;font-weight:700">${p.name}</div>
+      ${p.isHost?'<span style="font-size:11px;padding:2px 8px;border-radius:20px;background:#c6a15b;color:#1e4d2b;font-weight:900">主持人</span>':''}
+      ${uid===mpUser?.uid?'<span style="font-size:11px;padding:2px 8px;border-radius:20px;background:#2f6b3f;color:#fff;font-weight:900">我</span>':''}
+    </div>`).join('');
 
-    if (hasPlayer || (s.uid && s.uid!=='')) {
-      // 有綁定的玩家
-      html += `<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #eef4ec">
-        <div style="width:36px;height:36px;border-radius:50%;background:#2f6b3f;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:14px;flex-shrink:0">${(s.name||'?')[0]}</div>
-        <div style="flex:1;font-size:14px;font-weight:700">${s.name}</div>
-        ${isHost?'<span style="font-size:11px;padding:2px 8px;border-radius:20px;background:#c6a15b;color:#1e4d2b;font-weight:900">主持人</span>':''}
-        ${s.uid===mpUser?.uid?'<span style="font-size:11px;padding:2px 8px;border-radius:20px;background:#2f6b3f;color:#fff;font-weight:900">我</span>':''}
-      </div>`;
-    } else if (mpIsHost) {
-      // 空槽：主持人可以手動輸入
+  // 第二部分：主持人手動輸入的空槽（最多補到4個）
+  if (mpIsHost) {
+    const joinedCount = players.length;
+    // 找目前手動輸入的名字（mpPlayers 裡無 uid 的）
+    const manualSlots = mpPlayers.filter(p => p.name?.trim() && !p.uid);
+    manualSlots.forEach((s, mi) => {
+      const i = mpPlayers.indexOf(s);
       html += `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #eef4ec">
-        <div style="width:36px;height:36px;border-radius:50%;background:#e8f0e6;color:#7c8879;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">${i+1}</div>
-        <input id="mpNameInp${i}" value="${s.name||''}"
-          placeholder="輸入球友名字（選填）"
-          oninput="if(!this._comp)mpNameInput(${i},this.value)"
-          onblur="mpNameInput(${i},this.value)"
-          oncompositionstart="this._comp=true"
-          oncompositionend="this._comp=false;mpNameInput(${i},this.value)"
-          style="flex:1;padding:9px 12px;border:2px solid #d6e2d3;border-radius:10px;font-size:14px;font-weight:700;outline:none;font-family:inherit;background:#fff" />
-        ${s.name?`<button onclick="mpClearName(${i})" style="background:none;border:none;color:#aaa;cursor:pointer;font-size:14px;padding:4px 6px">✕</button>`:''}
-      </div>`;
-    } else if (s.name) {
-      // 有手動輸入名字但無 uid（訪客看到，但不能改）
-      html += `<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #eef4ec">
-        <div style="width:36px;height:36px;border-radius:50%;background:#e8f0e6;color:#7c8879;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">${i+1}</div>
+        <div style="width:36px;height:36px;border-radius:50%;background:#e8f0e6;color:#7c8879;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">${(s.name||'?')[0]}</div>
         <div style="flex:1;font-size:14px;font-weight:700;color:#7c8879">${s.name}</div>
-        <span style="font-size:11px;color:#aaa">等待加入</span>
+        <span style="font-size:11px;color:#aaa;margin-right:4px">等待加入</span>
+        <button onclick="mpClearName(${i})" style="background:none;border:none;color:#aaa;cursor:pointer;font-size:14px;padding:4px 6px">✕</button>
+      </div>`;
+    });
+    // 空白輸入槽（湊足4個）
+    const usedCount = joinedCount + manualSlots.length;
+    for (let i = usedCount; i < 4; i++) {
+      const slotIdx = i;
+      html += `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #eef4ec">
+        <div style="width:36px;height:36px;border-radius:50%;background:#f0f4ef;color:#c0c8be;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">${slotIdx+1}</div>
+        <input id="mpNameInp${slotIdx}" value=""
+          placeholder="輸入球友名字（選填）"
+          oninput="if(!this._comp)mpNameInput(${slotIdx},this.value)"
+          onblur="mpNameInput(${slotIdx},this.value)"
+          oncompositionstart="this._comp=true"
+          oncompositionend="this._comp=false;mpNameInput(${slotIdx},this.value)"
+          style="flex:1;padding:9px 12px;border:2px solid #d6e2d3;border-radius:10px;font-size:14px;font-weight:700;outline:none;font-family:inherit;background:#fff" />
       </div>`;
     }
   }
+
   el.innerHTML = html;
   document.getElementById('mpPlayerCount').textContent = players.length;
-
-  // 更新讓洞設定（名字變了就更新）
   mpUpdateHdcp();
   mpUpdateModePlayers();
 }
