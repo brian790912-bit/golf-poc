@@ -4194,7 +4194,7 @@ window.mpJoinGame = async () => {
           s.name?.trim() && (!s.uid || s.uid === '') && s.uid !== hostUid
         );
         if (manualSlots.length > 0) {
-          mpShowBind(slots, () => showPage('page-lobby'));
+          mpShowBind(slots);
         }
       }
     }
@@ -4227,11 +4227,13 @@ function mpEnterLobby(code) {
 
     // 如果有 lobby.slots，以它為主（主持人設定的順序）
     if (g.lobby?.slots && !mpApplying) {
-      // 把加入的玩家 uid 對應到 slots
-      g.lobby.slots.forEach((s, i) => {
+      const rawSlots = Array.isArray(g.lobby.slots) ? g.lobby.slots : Object.values(g.lobby.slots);
+      rawSlots.forEach((s, i) => {
+        if (!s) return;
         if (s.uid) {
           const p = g.players?.[s.uid];
           if (p) mpSlots[i] = { name: p.name, uid: s.uid, photo: p.photo||'' };
+          else mpSlots[i] = { name: s.name||'', uid: s.uid, photo: s.photo||'' };
         } else if (s.name) {
           mpSlots[i] = { name: s.name, uid: '', photo: '' };
         }
@@ -4245,10 +4247,12 @@ function mpEnterLobby(code) {
         }
       });
     }
-    mpRenderSlots();
+    // 只有不在 slot 輸入格時才重渲
+    const _focusId = document.activeElement?.id;
+    if (!_focusId?.startsWith('slotInp')) mpRenderSlots();
 
-    // 套用 lobby 設定
-    if (g.lobby && !mpApplying) mpApplyLobby(g.lobby);
+    // 套用 lobby 設定（輸入中也跳過）
+    if (g.lobby && !mpApplying && !_focusId?.startsWith('slotInp')) mpApplyLobby(g.lobby);
 
     // 開始按鈕
     const btn = document.getElementById('startBtn');
@@ -4634,8 +4638,12 @@ function mpApplyLobby(s) {
   const sc=(id,v)=>{const e=document.getElementById(id);if(e)e.checked=!!v;};
 
   if(s.slots){
-    mpSlots=s.slots.map(sl=>({...sl}));
-    // 如果有 slot input 正在 focus，不重渲避免跳走
+    // Firebase 陣列可能有 null，用空物件填充
+    const rawSlots = Array.isArray(s.slots) ? s.slots : Object.values(s.slots);
+    mpSlots = Array.from({length:4}, (_,i) => {
+      const sl = rawSlots[i];
+      return sl ? {...sl} : {name:'',uid:''};
+    });
     const focusedEl = document.activeElement;
     const isTypingSlot = focusedEl?.id?.startsWith('slotInp');
     if (!isTypingSlot) mpRenderSlots();
@@ -4749,7 +4757,8 @@ function mpEnterGame(code, game) {
     document.addEventListener('change',mpGuestSync,true);
     // 顯示玩家綁定畫面，綁定後才進計分
     const slots = game.lobby?.slots || [];
-    mpShowBind(slots, () => showPage('page-game'));
+    if (slots) slots._hostUid = game.hostUid || '';
+    mpShowBind(slots);
   }
 
   mpListener=onValue(ref(db,`games/${code}`),snap=>{
@@ -4867,18 +4876,17 @@ function mpApplyGuestScores(scores){
 }
 
 // ── BIND ──────────────────────────────────────────────────
-let mpAfterBind = null; // 綁定後的回調
-
-function mpShowBind(slots, afterBind){
-  mpAfterBind = afterBind || null;
-  // 只顯示：有名字 + 沒有 uid（主持人手動輸入未綁定的）
+function mpShowBind(slots){
+  // 只顯示：有名字 + 沒有 uid + 不是主持人
+  const hostUid = slots._hostUid || '';
   const available = slots.map((s,i)=>({...s,i})).filter(s => {
     if (!s.name?.trim()) return false;
-    if (s.uid && s.uid !== '') return false; // 已有人綁定
+    if (s.uid && s.uid !== '') return false; // 已被綁定
+    if (s.uid === hostUid) return false; // 主持人
     return true;
   });
   if(!available.length){
-    if(mpAfterBind) mpAfterBind();
+    mpBindGoNext();
     return;
   }
   document.getElementById('bindList').innerHTML=available.map(s=>`
@@ -4889,6 +4897,15 @@ function mpShowBind(slots, afterBind){
   showPage('page-bind');
 }
 
+// 綁定後根據球局狀態決定去哪
+async function mpBindGoNext() {
+  if (!mpGameId) { showPage('page-lobby'); return; }
+  const snap = await get(ref(db,`games/${mpGameId}`));
+  const status = snap.exists() ? snap.val().status : 'lobby';
+  if (status === 'playing') showPage('page-game');
+  else showPage('page-lobby');
+}
+
 window.mpBind = async idx => {
   mpBoundIdx=idx;
   if(mpGameId&&mpUser.displayName){
@@ -4897,14 +4914,12 @@ window.mpBind = async idx => {
     if(el){el.value=mpUser.displayName;el.dispatchEvent(new Event('input',{bubbles:true}));}
   }
   toast(`✅ 已綁定為玩家${idx+1}：${mpUser.displayName}`);
-  if(mpAfterBind) { mpAfterBind(); mpAfterBind=null; }
-  else showPage('page-lobby');
+  mpBindGoNext();
 };
 
 window.mpBindSkip=()=>{
   mpBoundIdx=null;
-  if(mpAfterBind) { mpAfterBind(); mpAfterBind=null; }
-  else showPage('page-lobby');
+  mpBindGoNext();
 };
 
 // ── LEAVE ─────────────────────────────────────────────────
