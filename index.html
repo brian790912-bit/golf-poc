@@ -4182,16 +4182,21 @@ window.mpJoinGame = async () => {
     mpEnterGame(code, game);
   } else {
     mpEnterLobby(code);
-    // 訪客加入等待室後立刻顯示綁定畫面（綁定後回等待室）
+    // 訪客：讀取一次 slots，找出主持人手動輸入但還沒綁定訪客的名字
     if (!mpIsHost) {
-      setTimeout(async () => {
-        const snap = await get(ref(db,`games/${code}`));
-        if (!snap.exists()) return;
-        const g = snap.val();
-        const slots = g.lobby?.slots || mpSlots;
-        // 綁定後回到等待室
-        mpShowBind(slots, () => showPage('page-lobby'));
-      }, 500);
+      const gameSnap = await get(ref(db,`games/${code}`));
+      if (gameSnap.exists()) {
+        const g = gameSnap.val();
+        const hostUid = g.hostUid;
+        const slots = g.lobby?.slots || [];
+        // 手動輸入的條件：有名字、沒有 uid（或 uid 是空字串）、不是主持人 uid
+        const manualSlots = slots.filter(s =>
+          s.name?.trim() && (!s.uid || s.uid === '') && s.uid !== hostUid
+        );
+        if (manualSlots.length > 0) {
+          mpShowBind(slots, () => showPage('page-lobby'));
+        }
+      }
     }
   }
 };
@@ -4866,12 +4871,10 @@ let mpAfterBind = null; // 綁定後的回調
 
 function mpShowBind(slots, afterBind){
   mpAfterBind = afterBind || null;
-  // 過濾：不顯示主持人、已被綁定的玩家
+  // 只顯示：有名字 + 沒有 uid（主持人手動輸入未綁定的）
   const available = slots.map((s,i)=>({...s,i})).filter(s => {
     if (!s.name?.trim()) return false;
-    if (s.uid === mpUser?.uid) return false; // 自己（主持人）
-    // 已被其他人綁定的跳過（uid 有值且不是自己）
-    if (s.uid && s.uid !== '') return false;
+    if (s.uid && s.uid !== '') return false; // 已有人綁定
     return true;
   });
   if(!available.length){
